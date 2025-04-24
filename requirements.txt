@@ -1,0 +1,25 @@
+# Alb-SQL: Cross-Attention SQL Fabric dependencies
+
+# Core dependencies
+numpy>=1.20.0
+
+# LLM API dependencies (inferred based on project nature)
+openai>=1.0.0
+
+# Database connectors (supports multiple database types)
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0  # PostgreSQL
+pymysql>=1.0.0  # MySQL
+sqlite3  # Included in Python standard library
+
+# Optional utilities
+pandas>=1.5.0  # For data handling
+matplotlib>=3.5.0  # For visualization
+scikit-learn>=1.0.0  # For embedding functions
+
+# Development dependencies
+pytest>=7.0.0
+black>=23.0.0
+isort>=5.12.0
+flake8>=6.0.0
+mypy>=1.0.0
