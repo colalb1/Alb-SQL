@@ -56,10 +56,10 @@ class AdaptiveContextManager:
         Initialize the AdaptiveContextManager.
 
         Args:
-            max_tokens: Maximum tokens available for context.
+            max_tokens (int): Maximum tokens available for context.
             schema_analyzer: Schema analyzer to use for schema information.
-            min_schema_tokens: Minimum tokens to allocate for schema information.
-            min_examples_tokens: Minimum tokens to allocate for examples.
+            min_schema_tokens (int): Minimum tokens to allocate for schema information.
+            min_examples_tokens (int): Minimum tokens to allocate for examples.
         """
         self.max_tokens = max_tokens
         self.schema_analyzer = schema_analyzer
@@ -114,9 +114,9 @@ class AdaptiveContextManager:
         Analyze the complexity of a natural language query.
 
         Args:
-            query_text: Natural language query.
-            detected_tables: Tables detected in the query.
-            sql_hint: Optional SQL hint if available.
+            query_text (str): Natural language query.
+            detected_tables (List[str]): Tables detected in the query.
+            sql_hint (Optional[str]): Optional SQL hint if available.
 
         Returns:
             Query complexity level.
@@ -202,7 +202,7 @@ class AdaptiveContextManager:
         Allocate tokens based on query complexity.
 
         Args:
-            complexity: Query complexity level.
+            complexity (ComplexityLevel): Query complexity level.
 
         Returns:
             TokenAllocation with token allocation for different prompt components.
@@ -283,10 +283,10 @@ class AdaptiveContextManager:
         Generate a schema summary that fits within the allocated token budget.
 
         Args:
-            db_name: Database name.
-            detected_tables: Tables detected in the query.
-            token_allocation: Token allocation for schema summary.
-            include_samples: Whether to include sample data.
+            db_name (str): Database name.
+            detected_tables (List[str]): Tables detected in the query.
+            token_allocation (int): Token allocation for schema summary.
+            include_samples (bool): Whether to include sample data.
 
         Returns:
             Schema summary string.
@@ -342,7 +342,7 @@ class AdaptiveContextManager:
 
         Args:
             schema_info: Schema information.
-            detected_tables: Tables detected in the query.
+            detected_tables (List[str]): Tables detected in the query.
 
         Returns:
             Dictionary mapping table names to detail level token estimates.
@@ -375,8 +375,8 @@ class AdaptiveContextManager:
         Prioritize tables based on detection order and complexity.
 
         Args:
-            detected_tables: Tables detected in the query.
-            token_estimates: Token estimates for tables.
+            detected_tables (List[str]): Tables detected in the query.
+            token_estimates (Dict[str, Dict[str, int]]): Token estimates for tables.
 
         Returns:
             List of prioritized table names.
@@ -398,9 +398,9 @@ class AdaptiveContextManager:
         Determine the appropriate detail level based on token allocation.
 
         Args:
-            prioritized_tables: Prioritized list of tables.
-            token_estimates: Token estimates for tables.
-            token_allocation: Token allocation for schema summary.
+            prioritized_tables (List[str]): Prioritized list of tables.
+            token_estimates (Dict[str, Dict[str, int]]): Token estimates for tables.
+            token_allocation (int): Token allocation for schema summary.
 
         Returns:
             Tuple of (detail_level, tables_to_include).
@@ -473,8 +473,8 @@ class AdaptiveContextManager:
 
         Args:
             schema_info: Schema information.
-            tables: Tables to include in the summary.
-            token_allocation: Token allocation for relationships.
+            tables (List[str]): Tables to include in the summary.
+            token_allocation (int): Token allocation for relationships.
 
         Returns:
             Relationship summary string.
@@ -512,9 +512,9 @@ class AdaptiveContextManager:
         Generate query patterns that fit within the allocated token budget.
 
         Args:
-            query_text: Natural language query.
-            detected_tables: Tables detected in the query.
-            token_allocation: Token allocation for query patterns.
+            query_text (str): Natural language query.
+            detected_tables (List[str]): Tables detected in the query.
+            token_allocation (int): Token allocation for query patterns.
 
         Returns:
             Query patterns string.
@@ -563,9 +563,9 @@ class AdaptiveContextManager:
         Generate common mistakes that fit within the allocated token budget.
 
         Args:
-            query_text: Natural language query.
-            detected_tables: Tables detected in the query.
-            token_allocation: Token allocation for common mistakes.
+            query_text (str): Natural language query.
+            detected_tables (List[str]): Tables detected in the query.
+            token_allocation (int): Token allocation for common mistakes.
 
         Returns:
             Common mistakes string.
@@ -607,9 +607,9 @@ class AdaptiveContextManager:
         Generate type constraints that fit within the allocated token budget.
 
         Args:
-            db_name: Database name.
-            detected_tables: Tables detected in the query.
-            token_allocation: Token allocation for type constraints.
+            db_name (str): Database name.
+            detected_tables (List[str]): Tables detected in the query.
+            token_allocation (int): Token allocation for type constraints.
 
         Returns:
             Type constraints string.
@@ -657,9 +657,9 @@ class AdaptiveContextManager:
         Generate examples that fit within the allocated token budget.
 
         Args:
-            db_name: Database name.
-            detected_tables: Tables detected in the query.
-            token_allocation: Token allocation for examples.
+            db_name (str): Database name.
+            detected_tables (List[str]): Tables detected in the query.
+            token_allocation (int): Token allocation for examples.
 
         Returns:
             Examples string.
@@ -705,8 +705,8 @@ class AdaptiveContextManager:
         Generate reasoning chain that fits within the allocated token budget.
 
         Args:
-            detected_tables: Tables detected in the query.
-            token_allocation: Token allocation for reasoning chain.
+            detected_tables (List[str]): Tables detected in the query.
+            token_allocation (int): Token allocation for reasoning chain.
 
         Returns:
             Reasoning chain string.
@@ -750,10 +750,10 @@ class AdaptiveContextManager:
         Generate a complete adaptive context for the prompt.
 
         Args:
-            query_text: Natural language query.
-            db_name: Database name.
-            detected_tables: Tables detected in the query.
-            sql_hint: Optional SQL hint if available.
+            query_text (str): Natural language query.
+            db_name (str): Database name.
+            detected_tables (List[str]): Tables detected in the query.
+            sql_hint (Optional[str]): Optional SQL hint if available.
 
         Returns:
             Dictionary with context components.
@@ -818,7 +818,7 @@ class AdaptiveContextManager:
         Estimate the number of tokens in a string.
 
         Args:
-            text: String to estimate tokens for.
+            text (str): String to estimate tokens for.
 
         Returns:
             Estimated token count.

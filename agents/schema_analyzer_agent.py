@@ -72,7 +72,7 @@ class SchemaAnalyzerAgent:
 
         Args:
             db_connector: Connector to interact with databases.
-            cache_dir: Directory to cache schema information.
+            cache_dir (Optional[str]): Directory to cache schema information.
         """
         self.db_connector = db_connector
         self.cache_dir = cache_dir
@@ -103,8 +103,8 @@ class SchemaAnalyzerAgent:
         Analyze a database schema and return information about it.
 
         Args:
-            db_name: Database name.
-            refresh: Whether to refresh cached schema information.
+            db_name (str): Database name.
+            refresh (bool): Whether to refresh cached schema information.
 
         Returns:
             SchemaInfo containing schema information.
@@ -136,7 +136,7 @@ class SchemaAnalyzerAgent:
         Extract schema information from a database.
 
         Args:
-            db_name: Database name.
+            db_name (str): Database name.
 
         Returns:
             SchemaInfo containing schema information.
@@ -374,7 +374,7 @@ class SchemaAnalyzerAgent:
         Analyze relationships between tables in a schema.
 
         Args:
-            schema_info: SchemaInfo to analyze.
+            schema_info (SchemaInfo): SchemaInfo to analyze.
         """
         # Extract relationships from foreign keys
         relationships = []
@@ -392,7 +392,7 @@ class SchemaAnalyzerAgent:
         Analyze column semantics to identify common patterns.
 
         Args:
-            schema_info: SchemaInfo to analyze.
+            schema_info (SchemaInfo): SchemaInfo to analyze.
         """
         for table_name, table_info in schema_info.tables.items():
             for column_name, column_info in table_info.columns.items():
@@ -452,8 +452,8 @@ class SchemaAnalyzerAgent:
         Generate SQL JOIN conditions for a set of tables.
 
         Args:
-            schema_info: SchemaInfo containing schema information.
-            tables: List of table names to join.
+            schema_info (SchemaInfo): SchemaInfo containing schema information.
+            tables (List[str]): List of table names to join.
 
         Returns:
             List of JOIN conditions.
@@ -494,7 +494,7 @@ class SchemaAnalyzerAgent:
         Infer constraints for columns based on their names and data types.
 
         Args:
-            schema_info: SchemaInfo containing schema information.
+            schema_info (SchemaInfo): SchemaInfo containing schema information.
 
         Returns:
             Dictionary mapping table.column to constraint expressions.
@@ -535,9 +535,9 @@ class SchemaAnalyzerAgent:
         Generate a human-readable summary of the schema.
 
         Args:
-            schema_info: SchemaInfo containing schema information.
-            target_tables: Optional list of tables to include in the summary.
-            detail_level: Level of detail to include ('low', 'medium', 'high').
+            schema_info (SchemaInfo): SchemaInfo containing schema information.
+            target_tables (Optional[List[str]]): Optional list of tables to include in the summary.
+            detail_level (str): Level of detail to include ('low', 'medium', 'high').
 
         Returns:
             Human-readable schema summary.

@@ -42,9 +42,9 @@ class AlbSQL:
         Initialize the Alb-SQL system.
 
         Args:
-            model_name: Name of the LLM model to use.
-            max_tokens: Maximum tokens for context.
-            cache_dir: Directory for caching data.
+            model_name (str): Name of the LLM model to use.
+            max_tokens (int): Maximum tokens for context.
+            cache_dir (str): Directory for caching data.
             db_connector: Database connector for executing queries.
         """
         self.model_name = model_name
@@ -102,11 +102,11 @@ class AlbSQL:
         Generate SQL from a natural language query.
 
         Args:
-            query_text: Natural language query.
-            db_name: Database name.
-            domain: Optional domain for domain-specific handling.
-            clarify_ambiguities: Whether to clarify ambiguities.
-            execution_aware: Whether to use execution-aware validation.
+            query_text (str): Natural language query.
+            db_name (str): Database name.
+            domain (Optional[str]): Optional domain for domain-specific handling.
+            clarify_ambiguities (bool): Whether to clarify ambiguities.
+            execution_aware (bool): Whether to use execution-aware validation.
 
         Returns:
             Dictionary with generated SQL and additional information.
@@ -202,9 +202,9 @@ class AlbSQL:
         Detect tables mentioned in the query.
 
         Args:
-            query_text: Natural language query.
-            db_name: Database name.
-            domain: Optional domain for domain-specific handling.
+            query_text (str): Natural language query.
+            db_name (str): Database name.
+            domain (Optional[str]): Optional domain for domain-specific handling.
 
         Returns:
             List of detected table names.
@@ -249,8 +249,8 @@ class AlbSQL:
         Get relevant tables for a domain.
 
         Args:
-            domain: Domain name.
-            all_tables: All available tables.
+            domain (str): Domain name.
+            all_tables (List[str]): All available tables.
 
         Returns:
             List of relevant tables for the domain.
@@ -304,11 +304,11 @@ class AlbSQL:
         Generate a schema-aware prompt for the LLM.
 
         Args:
-            query_text: Natural language query.
-            db_name: Database name.
-            adaptive_context: Adaptive context components.
-            ambiguities: List of ambiguities.
-            domain: Optional domain for domain-specific handling.
+            query_text (str): Natural language query.
+            db_name (str): Database name.
+            adaptive_context (Dict[str, Any]): Adaptive context components.
+            ambiguities (List[Any]): List of ambiguities.
+            domain (Optional[str]): Optional domain for domain-specific handling.
 
         Returns:
             Prompt string for the LLM.
@@ -383,8 +383,8 @@ class AlbSQL:
         Generate SQL candidates from the prompt using the LLM.
 
         Args:
-            prompt: Prompt for the LLM.
-            num_candidates: Number of candidates to generate.
+            prompt (str): Prompt for the LLM.
+            num_candidates (int): Number of candidates to generate.
 
         Returns:
             List of SQL candidate strings.
@@ -417,8 +417,8 @@ class AlbSQL:
         Validate SQL candidates and pick the best one.
 
         Args:
-            sql_candidates: List of SQL candidate strings.
-            db_name: Database name.
+            sql_candidates (List[str]): List of SQL candidate strings.
+            db_name (str): Database name.
 
         Returns:
             Tuple of (best_candidate, metrics).
@@ -527,7 +527,7 @@ def main():
     db_name = "e_commerce"
 
     # Generate SQL
-    result = alb_sql.generate_sql(query, db_name)
+    result = alb_sql.generate_sql(query_text=query, db_name=db_name)
 
     # Print result
     print("\nGenerated SQL:")

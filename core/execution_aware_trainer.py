@@ -65,10 +65,10 @@ class ExecutionAwareTrainer:
 
         Args:
             db_connector: Connector to execute SQL against databases.
-            execution_timeout: Maximum time (in seconds) to wait for query execution.
-            max_rows_to_compare: Maximum number of rows to compare when evaluating results.
-            plan_weight: Weight of the execution plan similarity in the loss function.
-            result_weight: Weight of the result similarity in the loss function.
+            execution_timeout (int): Maximum time (in seconds) to wait for query execution.
+            max_rows_to_compare (int): Maximum number of rows to compare when evaluating results.
+            plan_weight (float): Weight of the execution plan similarity in the loss function.
+            result_weight (float): Weight of the result similarity in the loss function.
         """
         self.db_connector = db_connector
         self.execution_timeout = execution_timeout
@@ -84,9 +84,9 @@ class ExecutionAwareTrainer:
         Execute an SQL query and return the results.
 
         Args:
-            db_name: Database name to execute against.
-            query: SQL query to execute.
-            get_execution_plan: Whether to return the execution plan.
+            db_name (str): Database name to execute against.
+            query (str): SQL query to execute.
+            get_execution_plan (bool): Whether to return the execution plan.
 
         Returns:
             QueryExecutionResult containing execution results.
@@ -140,8 +140,8 @@ class ExecutionAwareTrainer:
         Get the execution plan for an SQL query without executing it.
 
         Args:
-            db_name: Database name.
-            query: SQL query.
+            db_name (str): Database name.
+            query (str): SQL query.
 
         Returns:
             Execution plan or None if not available.
@@ -170,8 +170,8 @@ class ExecutionAwareTrainer:
         Compare two query result sets and return a similarity score.
 
         Args:
-            result1: First result set (list of row dictionaries).
-            result2: Second result set (list of row dictionaries).
+            result1 (List[Dict[str, Any]]): First result set (list of row dictionaries).
+            result2 (List[Dict[str, Any]]): Second result set (list of row dictionaries).
 
         Returns:
             Similarity score between 0 (completely different) and 1 (identical).
@@ -206,8 +206,8 @@ class ExecutionAwareTrainer:
         Compare two execution plans and return a similarity score.
 
         Args:
-            plan1: First execution plan.
-            plan2: Second execution plan.
+            plan1 (Dict[str, Any]): First execution plan.
+            plan2 (Dict[str, Any]): Second execution plan.
 
         Returns:
             Similarity score between 0 (completely different) and 1 (identical).
@@ -242,9 +242,9 @@ class ExecutionAwareTrainer:
         Calculate a loss value based on SQL correctness.
 
         Args:
-            generated_sql: Generated SQL query.
-            reference_sql: Reference (correct) SQL query.
-            db_name: Database name to execute against.
+            generated_sql (str): Generated SQL query.
+            reference_sql (str): Reference (correct) SQL query.
+            db_name (str): Database name to execute against.
 
         Returns:
             Loss value (lower is better).
@@ -283,9 +283,9 @@ class ExecutionAwareTrainer:
         Evaluate a generated SQL query against a reference query.
 
         Args:
-            generated_sql: Generated SQL query to evaluate.
-            reference_sql: Reference (correct) SQL query.
-            db_name: Database name to execute against.
+            generated_sql (str): Generated SQL query to evaluate.
+            reference_sql (str): Reference (correct) SQL query.
+            db_name (str): Database name to execute against.
 
         Returns:
             QueryEvalMetrics with detailed evaluation metrics.
@@ -361,11 +361,11 @@ class ExecutionAwareTrainer:
         Generate a schema-aware prompt for SQL generation.
 
         Args:
-            db_name: Database name.
-            target_tables: List of tables relevant to the query.
-            question: Natural language question to translate to SQL.
-            include_sample_data: Whether to include sample data in the prompt.
-            complexity_estimate: Estimated complexity of the query.
+            db_name (str): Database name.
+            target_tables (List[str]): List of tables relevant to the query.
+            question (str): Natural language question to translate to SQL.
+            include_sample_data (bool): Whether to include sample data in the prompt.
+            complexity_estimate (str): Estimated complexity of the query.
 
         Returns:
             Formatted prompt for LLM.
@@ -429,10 +429,10 @@ SELECT ...
         Generate a schema summary for the prompt.
 
         Args:
-            db_name: Database name.
-            tables: List of tables to include.
-            detail_level: Level of detail to include ('brief', 'moderate', 'detailed').
-            include_sample_data: Whether to include sample data.
+            db_name (str): Database name.
+            tables (List[str]): List of tables to include.
+            detail_level (str): Level of detail to include ('brief', 'moderate', 'detailed').
+            include_sample_data (bool): Whether to include sample data.
 
         Returns:
             Schema summary string.
@@ -480,8 +480,8 @@ SELECT ...
         Get common mistakes for the given database and tables.
 
         Args:
-            db_name: Database name.
-            tables: List of tables.
+            db_name (str): Database name.
+            tables (List[str]): List of tables.
 
         Returns:
             String describing common mistakes.
@@ -504,8 +504,8 @@ SELECT ...
         Get related tables based on foreign key relationships.
 
         Args:
-            db_name: Database name.
-            tables: List of primary tables.
+            db_name (str): Database name.
+            tables (List[str]): List of primary tables.
 
         Returns:
             List of related tables.

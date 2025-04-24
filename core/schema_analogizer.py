@@ -31,8 +31,8 @@ class SchemaAnalogizer:
         Initialize the SchemaAnalogizer.
 
         Args:
-            embedding_dim: Dimension of the embeddings used.
-            similarity_threshold: Threshold for similarity to consider elements as analogous.
+            embedding_dim (int): Dimension of the embeddings used.
+            similarity_threshold (float): Threshold for similarity to consider elements as analogous.
         """
         self.embedding_dim = embedding_dim
         self.similarity_threshold = similarity_threshold
@@ -47,7 +47,7 @@ class SchemaAnalogizer:
         Load schema embeddings from a pickle file.
 
         Args:
-            path: Path to the pickle file containing schema embeddings.
+            path (str): Path to the pickle file containing schema embeddings.
         """
         try:
             with open(path, "rb") as f:
@@ -62,7 +62,7 @@ class SchemaAnalogizer:
         Save schema embeddings to a pickle file.
 
         Args:
-            path: Path to save the schema embeddings.
+            path (str): Path to save the schema embeddings.
         """
         try:
             with open(path, "wb") as f:
@@ -84,11 +84,11 @@ class SchemaAnalogizer:
         Compute embedding for a schema element.
 
         Args:
-            db_name: Database name.
-            element_name: Name of the schema element.
-            element_type: Type of the element ('table', 'column', etc.).
-            description: Description of the element.
-            sample_values: Optional list of sample values for the element.
+            db_name (str): Database name.
+            element_name (str): Name of the schema element.
+            element_type (str): Type of the element ('table', 'column', etc.).
+            description (str): Description of the element.
+            sample_values (Optional[List[str]]): Optional list of sample values for the element.
 
         Returns:
             Embedding vector for the schema element.
@@ -114,10 +114,10 @@ class SchemaAnalogizer:
         Find analogous schema elements in a target database.
 
         Args:
-            source_db: Source database name.
-            source_element: Source element key (e.g., 'table:patients').
-            target_db: Target database name.
-            top_k: Number of top analogies to return.
+            source_db (str): Source database name.
+            source_element (str): Source element key (e.g., 'table:patients').
+            target_db (str): Target database name.
+            top_k (int): Number of top analogies to return.
 
         Returns:
             List of tuples (element_key, similarity_score) for the top_k analogies.
@@ -165,7 +165,7 @@ class SchemaAnalogizer:
         Build a relationship graph for a database schema.
 
         Args:
-            db_name: Database name.
+            db_name (str): Database name.
 
         Returns:
             Dictionary mapping element keys to lists of (related_element, relationship_type, strength).
@@ -211,10 +211,10 @@ class SchemaAnalogizer:
         Find chains of analogies between databases.
 
         Args:
-            source_db: Source database name.
-            source_element: Source element key.
-            target_db: Target database name.
-            max_length: Maximum length of the analogy chain.
+            source_db (str): Source database name.
+            source_element (str): Source element key.
+            target_db (str): Target database name.
+            max_length (int): Maximum length of the analogy chain.
 
         Returns:
             List of analogy chains, where each chain is a list of (element, db_name, similarity) tuples.
@@ -243,9 +243,9 @@ class SchemaAnalogizer:
         Get example analogies to help with prompt construction.
 
         Args:
-            db_name: Database name.
-            element_type: Type of elements to find analogies for.
-            k: Number of examples to return.
+            db_name (str): Database name.
+            element_type (str): Type of elements to find analogies for.
+            k (int): Number of examples to return.
 
         Returns:
             List of example analogies in dictionary form.

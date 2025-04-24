@@ -72,8 +72,8 @@ class AmbiguityResolverAgent:
 
         Args:
             schema_analyzer: Schema analyzer to use for schema information.
-            confidence_threshold: Threshold for confidence to avoid clarification.
-            max_clarifications: Maximum number of clarifications to ask.
+            confidence_threshold (float): Threshold for confidence to avoid clarification.
+            max_clarifications (int): Maximum number of clarifications to ask.
         """
         self.schema_analyzer = schema_analyzer
         self.confidence_threshold = confidence_threshold
@@ -111,9 +111,9 @@ class AmbiguityResolverAgent:
         Identify ambiguities in a natural language query.
 
         Args:
-            query_text: Natural language query.
-            db_name: Database name.
-            detected_tables: Tables detected in the query.
+            query_text (str): Natural language query.
+            db_name (str): Database name.
+            detected_tables (List[str]): Tables detected in the query.
 
         Returns:
             List of identified ambiguities.
@@ -166,9 +166,9 @@ class AmbiguityResolverAgent:
         Identify column reference ambiguities.
 
         Args:
-            query_text: Natural language query.
+            query_text (str): Natural language query.
             schema_info: Schema information.
-            detected_tables: Tables detected in the query.
+            detected_tables (List[str]): Tables detected in the query.
 
         Returns:
             List of column reference ambiguities.
@@ -234,9 +234,9 @@ class AmbiguityResolverAgent:
         Identify join path ambiguities.
 
         Args:
-            query_text: Natural language query.
+            query_text (str): Natural language query.
             schema_info: Schema information.
-            detected_tables: Tables detected in the query.
+            detected_tables (List[str]): Tables detected in the query.
 
         Returns:
             List of join path ambiguities.
@@ -271,7 +271,7 @@ class AmbiguityResolverAgent:
         Identify aggregation ambiguities.
 
         Args:
-            query_text: Natural language query.
+            query_text (str): Natural language query.
             schema_info: Schema information.
 
         Returns:
@@ -320,7 +320,7 @@ class AmbiguityResolverAgent:
         Identify temporal ambiguities.
 
         Args:
-            query_text: Natural language query.
+            query_text (str): Natural language query.
 
         Returns:
             List of temporal ambiguities.
@@ -370,9 +370,9 @@ class AmbiguityResolverAgent:
         Identify ordering/grouping ambiguities.
 
         Args:
-            query_text: Natural language query.
+            query_text (str): Natural language query.
             schema_info: Schema information.
-            detected_tables: Tables detected in the query.
+            detected_tables (List[str]): Tables detected in the query.
 
         Returns:
             List of ordering/grouping ambiguities.
@@ -470,8 +470,8 @@ class AmbiguityResolverAgent:
         Attempt to resolve ambiguities automatically based on context.
 
         Args:
-            ambiguities: List of ambiguities to resolve.
-            context: Additional context to help resolve ambiguities.
+            ambiguities (List[Ambiguity]): List of ambiguities to resolve.
+            context (Dict[str, any]): Additional context to help resolve ambiguities.
 
         Returns:
             Updated list of ambiguities with resolutions when possible.
@@ -505,8 +505,8 @@ class AmbiguityResolverAgent:
         Attempt to resolve column reference ambiguity.
 
         Args:
-            ambiguity: Column reference ambiguity.
-            context: Additional context.
+            ambiguity (Ambiguity): Column reference ambiguity.
+            context (Dict[str, any]): Additional context.
         """
         # Check if we have previous query patterns
         query_patterns = context.get("query_patterns", [])
@@ -548,8 +548,8 @@ class AmbiguityResolverAgent:
         Attempt to resolve join path ambiguity.
 
         Args:
-            ambiguity: Join path ambiguity.
-            context: Additional context.
+            ambiguity (Ambiguity): Join path ambiguity.
+            context (Dict[str, any]): Additional context.
         """
         # For now, prefer direct joins over complex paths
         for option in ambiguity.options:
@@ -570,8 +570,8 @@ class AmbiguityResolverAgent:
         Attempt to resolve aggregation ambiguity.
 
         Args:
-            ambiguity: Aggregation ambiguity.
-            context: Additional context.
+            ambiguity (Ambiguity): Aggregation ambiguity.
+            context (Dict[str, any]): Additional context.
         """
         query_text = context.get("query_text", "")
 
@@ -615,8 +615,8 @@ class AmbiguityResolverAgent:
         Attempt to resolve temporal ambiguity.
 
         Args:
-            ambiguity: Temporal ambiguity.
-            context: Additional context.
+            ambiguity (Ambiguity): Temporal ambiguity.
+            context (Dict[str, any]): Additional context.
         """
         query_text = context.get("query_text", "")
 
@@ -653,8 +653,8 @@ class AmbiguityResolverAgent:
         Attempt to resolve ordering ambiguity.
 
         Args:
-            ambiguity: Ordering ambiguity.
-            context: Additional context.
+            ambiguity (Ambiguity): Ordering ambiguity.
+            context (Dict[str, any]): Additional context.
         """
         query_text = context.get("query_text", "")
 
@@ -723,8 +723,8 @@ class AmbiguityResolverAgent:
         Generate clarification questions for unresolved ambiguities.
 
         Args:
-            ambiguities: List of ambiguities.
-            max_questions: Maximum number of questions to generate.
+            ambiguities (List[Ambiguity]): List of ambiguities.
+            max_questions (int): Maximum number of questions to generate.
 
         Returns:
             List of clarification questions.
@@ -758,7 +758,7 @@ class AmbiguityResolverAgent:
         Generate a human-readable question for an ambiguity.
 
         Args:
-            ambiguity: Ambiguity to generate question for.
+            ambiguity (Ambiguity): Ambiguity to generate question for.
 
         Returns:
             Human-readable question.
@@ -793,8 +793,8 @@ class AmbiguityResolverAgent:
         Update ambiguity resolution based on user clarification.
 
         Args:
-            clarification: QueryClarification containing the ambiguity.
-            response: User's response to clarification.
+            clarification (QueryClarification): QueryClarification containing the ambiguity.
+            response (str): User's response to clarification.
         """
         clarification.clarification_response = response
         ambiguity = clarification.ambiguity
@@ -817,8 +817,8 @@ class AmbiguityResolverAgent:
         Apply resolved ambiguities to a SQL template.
 
         Args:
-            sql_template: SQL template with placeholders.
-            ambiguities: List of resolved ambiguities.
+            sql_template (str): SQL template with placeholders.
+            ambiguities (List[Ambiguity]): List of resolved ambiguities.
 
         Returns:
             Updated SQL with ambiguities resolved.
@@ -879,7 +879,7 @@ class AmbiguityResolverAgent:
         Convert a temporal option to a SQL expression.
 
         Args:
-            temporal_option: Temporal option (e.g., 'Last 7 days').
+            temporal_option (str): Temporal option (e.g., 'Last 7 days').
 
         Returns:
             SQL expression for the temporal option.
