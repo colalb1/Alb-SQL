@@ -1,0 +1,330 @@
+{
+    "schema_patterns": [
+        {
+            "pattern_id": "primary_key_lookup",
+            "description": "Look up a record by its primary key",
+            "template_sql": "SELECT * FROM {{table}} WHERE id = {{value}}",
+            "natural_language_patterns": [
+                "Find {{table}} with id {{value}}",
+                "Get {{table}} {{value}}",
+                "Show details for {{table}} {{value}}",
+                "What is {{table}} {{value}}"
+            ],
+            "example_data": {
+                "table": "users", 
+                "value": "42"
+            }
+        },
+        {
+            "pattern_id": "filter_by_attribute",
+            "description": "Filter records by a specific column value",
+            "template_sql": "SELECT * FROM {{table}} WHERE {{column}} = {{value}}",
+            "natural_language_patterns": [
+                "Find {{table}} with {{column}} {{value}}",
+                "Get {{table}} where {{column}} is {{value}}",
+                "Show {{table}} that have {{column}} {{value}}",
+                "List all {{table}} with {{column}} equal to {{value}}"
+            ],
+            "example_data": {
+                "table": "products", 
+                "column": "category", 
+                "value": "electronics"
+            }
+        },
+        {
+            "pattern_id": "join_one_to_many",
+            "description": "Join tables with one-to-many relationship",
+            "template_sql": "SELECT {{columns}} FROM {{table1}} JOIN {{table2}} ON {{table1}}.id = {{table2}}.{{table1_id}} WHERE {{condition}}",
+            "natural_language_patterns": [
+                "Find {{table2}} for {{table1}} where {{condition}}",
+                "Get {{columns}} from {{table1}} and their {{table2}}",
+                "Show {{table2}} belonging to {{table1}} with {{condition}}",
+                "List {{columns}} for {{table1}} and related {{table2}}"
+            ],
+            "example_data": {
+                "columns": "users.name, orders.order_date, orders.total",
+                "table1": "users",
+                "table2": "orders",
+                "table1_id": "user_id",
+                "condition": "users.id = 5"
+            }
+        },
+        {
+            "pattern_id": "aggregation",
+            "description": "Aggregate data with grouping",
+            "template_sql": "SELECT {{group_column}}, {{aggregation_function}}({{aggregation_column}}) as {{alias}} FROM {{table}} GROUP BY {{group_column}} ORDER BY {{alias}} DESC",
+            "natural_language_patterns": [
+                "Show {{aggregation_function}} of {{aggregation_column}} for each {{group_column}} in {{table}}",
+                "Calculate {{aggregation_function}} {{aggregation_column}} grouped by {{group_column}}",
+                "What is the {{aggregation_function}} {{aggregation_column}} by {{group_column}}",
+                "Compare {{group_column}} by {{aggregation_function}} of {{aggregation_column}}"
+            ],
+            "example_data": {
+                "group_column": "category_id",
+                "aggregation_function": "COUNT",
+                "aggregation_column": "*",
+                "alias": "total_count",
+                "table": "products"
+            }
+        },
+        {
+            "pattern_id": "filter_by_date_range",
+            "description": "Filter records by a date range",
+            "template_sql": "SELECT {{columns}} FROM {{table}} WHERE {{date_column}} BETWEEN {{start_date}} AND {{end_date}}",
+            "natural_language_patterns": [
+                "Find {{table}} between {{start_date}} and {{end_date}}",
+                "Get {{columns}} from {{table}} from {{start_date}} to {{end_date}}",
+                "Show {{table}} in date range {{start_date}} - {{end_date}}",
+                "List {{table}} where {{date_column}} is between {{start_date}} and {{end_date}}"
+            ],
+            "example_data": {
+                "columns": "*",
+                "table": "orders",
+                "date_column": "order_date",
+                "start_date": "'2023-01-01'",
+                "end_date": "'2023-01-31'"
+            }
+        },
+        {
+            "pattern_id": "pagination",
+            "description": "Paginate through results",
+            "template_sql": "SELECT {{columns}} FROM {{table}} ORDER BY {{order_column}} {{order_direction}} LIMIT {{limit}} OFFSET {{offset}}",
+            "natural_language_patterns": [
+                "Show page {{page_number}} of {{table}} ordered by {{order_column}}",
+                "Get {{limit}} {{table}} starting from position {{offset}}",
+                "List next {{limit}} {{table}} results",
+                "Display {{table}} page {{page_number}}"
+            ],
+            "example_data": {
+                "columns": "*",
+                "table": "products",
+                "order_column": "id",
+                "order_direction": "ASC",
+                "limit": "10",
+                "offset": "20",
+                "page_number": "3"
+            }
+        },
+        {
+            "pattern_id": "complex_join",
+            "description": "Complex join across multiple tables",
+            "template_sql": "SELECT {{columns}} FROM {{table1}} JOIN {{table2}} ON {{join_condition1}} JOIN {{table3}} ON {{join_condition2}} WHERE {{where_condition}}",
+            "natural_language_patterns": [
+                "Find {{columns}} across {{table1}}, {{table2}}, and {{table3}} where {{where_condition}}",
+                "Get data joining {{table1}}, {{table2}}, and {{table3}}",
+                "Show {{columns}} with information from {{table1}}, {{table2}}, and {{table3}}",
+                "Retrieve {{columns}} connecting {{table1}}, {{table2}}, and {{table3}}"
+            ],
+            "example_data": {
+                "columns": "users.name, orders.order_date, products.name as product_name",
+                "table1": "users",
+                "table2": "orders",
+                "table3": "order_items",
+                "join_condition1": "users.id = orders.user_id",
+                "join_condition2": "orders.id = order_items.order_id",
+                "where_condition": "orders.order_date > '2023-01-01'"
+            }
+        },
+        {
+            "pattern_id": "nested_subquery",
+            "description": "Query using nested subquery",
+            "template_sql": "SELECT {{columns}} FROM {{outer_table}} WHERE {{outer_column}} IN (SELECT {{inner_column}} FROM {{inner_table}} WHERE {{subquery_condition}})",
+            "natural_language_patterns": [
+                "Find {{outer_table}} where {{outer_column}} is among {{inner_table}} with {{subquery_condition}}",
+                "Get {{columns}} from {{outer_table}} matching {{inner_table}} where {{subquery_condition}}",
+                "Show {{outer_table}} with {{outer_column}} in {{inner_table}} filtered by {{subquery_condition}}",
+                "List {{outer_table}} whose {{outer_column}} appears in {{inner_table}} where {{subquery_condition}}"
+            ],
+            "example_data": {
+                "columns": "*",
+                "outer_table": "products",
+                "outer_column": "id",
+                "inner_column": "product_id",
+                "inner_table": "order_items",
+                "subquery_condition": "quantity > 5"
+            }
+        },
+        {
+            "pattern_id": "having_clause",
+            "description": "Query with HAVING clause for filtering aggregates",
+            "template_sql": "SELECT {{group_column}}, {{aggregation_function}}({{aggregation_column}}) as {{alias}} FROM {{table}} GROUP BY {{group_column}} HAVING {{having_condition}} ORDER BY {{alias}} DESC",
+            "natural_language_patterns": [
+                "Find {{group_column}} where the {{aggregation_function}} of {{aggregation_column}} {{having_condition}}",
+                "Show {{group_column}} groups with {{aggregation_function}} of {{aggregation_column}} {{having_condition}}",
+                "List {{group_column}} having {{aggregation_function}} of {{aggregation_column}} {{having_condition}}",
+                "Get {{group_column}} where aggregate {{having_condition}}"
+            ],
+            "example_data": {
+                "group_column": "category_id",
+                "aggregation_function": "COUNT",
+                "aggregation_column": "*",
+                "alias": "product_count",
+                "table": "products",
+                "having_condition": "COUNT(*) > 10"
+            }
+        },
+        {
+            "pattern_id": "window_function",
+            "description": "Query using window functions",
+            "template_sql": "SELECT {{columns}}, {{window_function}}({{window_column}}) OVER (PARTITION BY {{partition_column}} ORDER BY {{order_column}}) as {{alias}} FROM {{table}}",
+            "natural_language_patterns": [
+                "Calculate {{window_function}} of {{window_column}} for each {{partition_column}} ordered by {{order_column}}",
+                "Show {{columns}} with running {{window_function}} by {{partition_column}}",
+                "Get {{columns}} with {{window_function}} of {{window_column}} partitioned by {{partition_column}}",
+                "List {{columns}} with {{window_function}} over {{partition_column}} groups"
+            ],
+            "example_data": {
+                "columns": "*",
+                "window_function": "RANK",
+                "window_column": "price",
+                "partition_column": "category_id",
+                "order_column": "price DESC",
+                "alias": "price_rank",
+                "table": "products"
+            }
+        }
+    ],
+    "domain_specific_patterns": {
+        "e_commerce": [
+            {
+                "pattern_id": "popular_products",
+                "description": "Find most popular products by order frequency",
+                "template_sql": "SELECT p.id, p.name, COUNT(oi.product_id) as order_count FROM products p JOIN order_items oi ON p.id = oi.product_id GROUP BY p.id, p.name ORDER BY order_count DESC LIMIT {{limit}}",
+                "natural_language_patterns": [
+                    "What are the most popular products?",
+                    "Show top {{limit}} best-selling products",
+                    "Which products sell the most?",
+                    "List most frequently ordered products"
+                ],
+                "example_data": {
+                    "limit": "10"
+                }
+            },
+            {
+                "pattern_id": "customer_lifetime_value",
+                "description": "Calculate customer lifetime value",
+                "template_sql": "SELECT u.id, u.name, SUM(o.total_amount) as lifetime_value FROM users u JOIN orders o ON u.id = o.user_id GROUP BY u.id, u.name ORDER BY lifetime_value DESC",
+                "natural_language_patterns": [
+                    "Show customer lifetime value",
+                    "Calculate total spending by customer",
+                    "Which customers have spent the most?",
+                    "Rank customers by total order value"
+                ],
+                "example_data": {}
+            }
+        ],
+        "healthcare": [
+            {
+                "pattern_id": "patient_appointments",
+                "description": "List appointments for a specific patient",
+                "template_sql": "SELECT a.id, a.appointment_date, d.name as doctor_name, a.notes FROM appointments a JOIN doctors d ON a.doctor_id = d.id WHERE a.patient_id = {{patient_id}} ORDER BY a.appointment_date DESC",
+                "natural_language_patterns": [
+                    "Show appointments for patient {{patient_id}}",
+                    "List medical visits for patient {{patient_id}}",
+                    "When did patient {{patient_id}} see the doctor?",
+                    "Get appointment history for patient {{patient_id}}"
+                ],
+                "example_data": {
+                    "patient_id": "42"
+                }
+            },
+            {
+                "pattern_id": "diagnosis_frequency",
+                "description": "Calculate frequency of diagnoses",
+                "template_sql": "SELECT d.name, COUNT(*) as diagnosis_count FROM patient_diagnoses pd JOIN diagnoses d ON pd.diagnosis_id = d.id GROUP BY d.name ORDER BY diagnosis_count DESC",
+                "natural_language_patterns": [
+                    "What are the most common diagnoses?",
+                    "Show frequency of each diagnosis",
+                    "Count patients by diagnosis",
+                    "List diagnoses from most to least common"
+                ],
+                "example_data": {}
+            }
+        ],
+        "academic": [
+            {
+                "pattern_id": "student_grades",
+                "description": "Show grades for a student",
+                "template_sql": "SELECT c.name as course_name, g.grade FROM grades g JOIN courses c ON g.course_id = c.id WHERE g.student_id = {{student_id}} ORDER BY c.name",
+                "natural_language_patterns": [
+                    "Show grades for student {{student_id}}",
+                    "What grades did student {{student_id}} receive?",
+                    "List courses and grades for student {{student_id}}",
+                    "Get academic record for student {{student_id}}"
+                ],
+                "example_data": {
+                    "student_id": "1001"
+                }
+            },
+            {
+                "pattern_id": "course_enrollment",
+                "description": "Show enrollment counts by course",
+                "template_sql": "SELECT c.id, c.name, COUNT(e.student_id) as student_count FROM courses c JOIN enrollments e ON c.id = e.course_id GROUP BY c.id, c.name ORDER BY student_count DESC",
+                "natural_language_patterns": [
+                    "Which courses have the most students?",
+                    "Show course enrollment numbers",
+                    "Count students in each course",
+                    "List courses by popularity"
+                ],
+                "example_data": {}
+            }
+        ]
+    },
+    "semantic_relationships": {
+        "column_analogs": [
+            {
+                "domains": ["e_commerce", "healthcare", "academic"],
+                "analogous_columns": {
+                    "users.id": ["patients.id", "students.id"],
+                    "users.name": ["patients.name", "students.name"],
+                    "users.email": ["patients.email", "students.email"],
+                    "products.id": ["medications.id", "courses.id"],
+                    "products.name": ["medications.name", "courses.name"],
+                    "products.price": ["medications.cost", "courses.credits"],
+                    "orders.id": ["appointments.id", "enrollments.id"],
+                    "orders.user_id": ["appointments.patient_id", "enrollments.student_id"],
+                    "orders.created_at": ["appointments.appointment_date", "enrollments.enrollment_date"]
+                }
+            }
+        ],
+        "table_analogs": [
+            {
+                "domains": ["e_commerce", "healthcare", "academic"],
+                "analogous_tables": {
+                    "users": ["patients", "students"],
+                    "products": ["medications", "courses"],
+                    "categories": ["specialties", "departments"],
+                    "orders": ["appointments", "enrollments"],
+                    "order_items": ["prescriptions", "attendance"]
+                }
+            }
+        ]
+    },
+    "query_complexity_profiles": {
+        "simple": {
+            "max_tables": 1,
+            "max_conditions": 2,
+            "aggregation": false,
+            "subqueries": false,
+            "joins": false,
+            "token_allocation": "brief"
+        },
+        "moderate": {
+            "max_tables": 3,
+            "max_conditions": 4,
+            "aggregation": true,
+            "subqueries": false,
+            "joins": true,
+            "token_allocation": "moderate"
+        },
+        "complex": {
+            "max_tables": 5,
+            "max_conditions": 8,
+            "aggregation": true,
+            "subqueries": true,
+            "joins": true,
+            "window_functions": true,
+            "token_allocation": "detailed"
+        }
+    }
+}
