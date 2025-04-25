@@ -5,6 +5,8 @@ numpy>=1.20.0
 
 # LLM API dependencies (inferred based on project nature)
 openai>=1.0.0
+transformers>=4.30.0
+torch>=2.0.0
 
 # Database connectors (supports multiple database types)
 sqlalchemy>=2.0.0

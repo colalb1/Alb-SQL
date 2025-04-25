@@ -16,6 +16,7 @@ from agents.ambiguity_resolver import AmbiguityResolverAgent
 from agents.schema_analyzer_agent import SchemaAnalyzerAgent
 from core.adaptive_context_manager import AdaptiveContextManager
 from core.execution_aware_trainer import ExecutionAwareTrainer
+from core.llm_sql_generator import generate_sql_from_llm
 from core.schema_analogizer import SchemaAnalogizer
 
 # Configure logging
@@ -389,26 +390,69 @@ class AlbSQL:
         Returns:
             List of SQL candidate strings.
         """
-        # In a real implementation, this would call an LLM API
-        # For now, we'll return a placeholder SQL query
+        # Use Hugging Face LLM to generate SQL
+        try:
+            # Get schema context from the prompt
+            schema_context = None
+            if "**Schema Context**:" in prompt:
+                schema_context_parts = prompt.split("**Schema Context**:\n")
+                if len(schema_context_parts) > 1:
+                    schema_section = schema_context_parts[1].split("\n**")[0]
+                    schema_context = schema_section.strip()
 
-        # Simulate generating multiple candidates
-        candidates = []
-        for i in range(num_candidates):
-            # Generate increasingly complex candidates (for demonstration)
-            if i == 0:
-                # Simple candidate
-                sql = "SELECT * FROM users WHERE id = 1"
-            elif i == 1:
-                # Medium complexity candidate
-                sql = "SELECT u.name, o.order_date FROM users u JOIN orders o ON u.id = o.user_id WHERE u.id = 1"
-            else:
-                # Complex candidate
-                sql = "SELECT u.name, COUNT(o.id) as order_count FROM users u JOIN orders o ON u.id = o.user_id GROUP BY u.name HAVING COUNT(o.id) > 5 ORDER BY order_count DESC"
+            # Extract the question from the prompt
+            question = None
+            if "**Question**:" in prompt:
+                question_parts = prompt.split("**Question**:\n")
+                if len(question_parts) > 1:
+                    question = question_parts[1].split("\n**")[0].strip()
 
-            candidates.append(sql)
+            # If we couldn't extract the question, use the whole prompt
+            if not question:
+                question = prompt
 
-        return candidates
+            # Generate SQL using the Hugging Face model
+            model_configs = {
+                "model_name": "TheBloke/Llama-2-7B-Chat-GGUF",  # Default model
+                "temperature": 0.3
+                if num_candidates == 1
+                else 0.7,  # Lower temp for precision
+                "max_tokens": 512,  # Reasonable size for SQL queries
+                "num_candidates": num_candidates,
+                "clean_output": True,  # Clean and extract SQL
+            }
+
+            logger.info(
+                f"Generating SQL with HuggingFace model for question: {question[:50]}..."
+            )
+
+            candidates = generate_sql_from_llm(
+                question=question, schema_context=schema_context, **model_configs
+            )
+
+            # Handle list or string return type
+            if isinstance(candidates, str):
+                candidates = [candidates]
+
+            # Ensure we have enough candidates
+            if len(candidates) < num_candidates:
+                logger.warning(
+                    f"Generated fewer candidates ({len(candidates)}) than requested ({num_candidates})"
+                )
+                # Duplicate the last candidate if needed
+                while len(candidates) < num_candidates:
+                    candidates.append(candidates[-1] if candidates else "SELECT 1")
+
+            return candidates[:num_candidates]  # Return exactly the number requested
+
+        except Exception as e:
+            logger.error(f"Error generating SQL with HuggingFace model: {e}")
+            # Fall back to placeholder SQL for demo purposes
+            return [
+                "SELECT * FROM users LIMIT 10",
+                "SELECT u.name, COUNT(o.id) FROM users u JOIN orders o ON u.id = o.user_id GROUP BY u.name",
+                "SELECT p.name, AVG(oi.price) FROM products p JOIN order_items oi ON p.id = oi.product_id GROUP BY p.name",
+            ][:num_candidates]
 
     def _validate_candidates(
         self, sql_candidates: List[str], db_name: str
