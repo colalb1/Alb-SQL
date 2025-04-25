@@ -1,8 +1,8 @@
 """
-Example script showing how to use the Hugging Face LLM SQL generator.
+Example script showing how to use the Hugging Face text-to-SQL generator.
 
 This script provides a simple CLI interface for generating SQL queries
-from natural language using Hugging Face models.
+from natural language using local Hugging Face models optimized for text-to-SQL tasks.
 """
 
 import argparse
@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import sys
+import time
 
 # Add the parent directory to the Python path so we can import from the main project
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,7 +28,7 @@ def setup_logger():
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Generate SQL from natural language using Hugging Face models."
+        description="Generate SQL from natural language using local Hugging Face models."
     )
     parser.add_argument("question", help="Natural language question to convert to SQL")
     parser.add_argument(
@@ -36,19 +37,25 @@ def parse_args():
     parser.add_argument(
         "--model",
         help="Hugging Face model name",
-        default="TheBloke/Llama-2-7B-Chat-GGUF",
+        default="Salesforce/codet5-base-sql",
     )
     parser.add_argument(
         "--temperature", help="Temperature for generation", type=float, default=0.3
     )
     parser.add_argument(
-        "--max-tokens", help="Maximum tokens to generate", type=int, default=1024
+        "--max-tokens", help="Maximum tokens to generate", type=int, default=256
     )
     parser.add_argument(
         "--candidates", help="Number of SQL candidates to generate", type=int, default=1
     )
     parser.add_argument(
         "--cpu", help="Force using CPU even if GPU is available", action="store_true"
+    )
+    parser.add_argument(
+        "--json", help="Return result in JSON format", action="store_true"
+    )
+    parser.add_argument(
+        "--benchmark", help="Run benchmark with N iterations", type=int, default=0
     )
 
     return parser.parse_args()
@@ -75,7 +82,7 @@ def load_schema(schema_path):
             with open(schema_path, "r") as f:
                 return f.read()
 
-    # Otherwise, assume schema_path is the actual schema text
+    # Otherwise assume schema_path is the actual schema text
     return schema_path
 
 
@@ -150,8 +157,13 @@ def main():
     # Load schema if provided
     schema_context = load_schema(args.schema)
 
-    # Import here to avoid circular imports
-    from core.llm_sql_generator import generate_sql_from_llm
+    # Import the appropriate function based on options
+    if args.json:
+        from core.llm_sql_generator import generate_sql_json_response as generate_func
+    elif args.candidates > 1:
+        from core.llm_sql_generator import generate_sql_from_llm as generate_func
+    else:
+        from core.llm_sql_generator import generate_sql_from_text as generate_func
 
     try:
         # Configure device
@@ -160,6 +172,7 @@ def main():
         print(f"Generating SQL for: {args.question}")
         print(f"Using model: {args.model}")
         print(f"Temperature: {args.temperature}")
+        print(f"Using device: {device or 'auto (CUDA if available, else CPU)'}")
 
         if schema_context:
             print(f"Schema context length: {len(schema_context)} characters")
@@ -169,31 +182,121 @@ def main():
         else:
             print("No schema context provided")
 
-        # Generate SQL
-        sql_candidates = generate_sql_from_llm(
-            question=args.question,
-            schema_context=schema_context,
-            model_name=args.model,
-            max_tokens=args.max_tokens,
-            temperature=args.temperature,
-            num_candidates=args.candidates,
-            device=device,
-        )
+        # Run benchmark if requested
+        if args.benchmark > 0:
+            print(f"\n=== Running benchmark with {args.benchmark} iterations ===")
+            total_time = 0
+            for i in range(args.benchmark):
+                start_time = time.time()
 
-        # Handle both string and list return types
-        if isinstance(sql_candidates, str):
-            sql_candidates = [sql_candidates]
+                if args.json:
+                    result = generate_func(
+                        prompt=args.question,
+                        schema_context=schema_context,
+                        model_name=args.model,
+                        max_tokens=args.max_tokens,
+                        temperature=args.temperature,
+                        device=device,
+                    )
+                elif args.candidates > 1:
+                    result = generate_func(
+                        question=args.question,
+                        schema_context=schema_context,
+                        model_name=args.model,
+                        max_tokens=args.max_tokens,
+                        temperature=args.temperature,
+                        num_candidates=args.candidates,
+                        device=device,
+                    )
+                else:
+                    result = generate_func(
+                        prompt=args.question,
+                        schema_context=schema_context,
+                        model_name=args.model,
+                        max_tokens=args.max_tokens,
+                        temperature=args.temperature,
+                        device=device,
+                    )
 
-        # Print results
-        print("\n=== Generated SQL ===")
-        for i, sql in enumerate(sql_candidates):
-            print(f"\nCandidate {i + 1}:")
-            print(f"{sql}")
+                iter_time = time.time() - start_time
+                total_time += iter_time
+                print(f"Iteration {i + 1}: {iter_time:.4f}s")
 
-        # Validate first SQL (if desired)
-        print("\n=== SQL Validation ===")
-        syntax_valid = validate_sql_syntax(sql_candidates[0])
-        print(f"Syntax check: {'PASS' if syntax_valid else 'FAIL'}")
+            avg_time = total_time / args.benchmark
+            print("\nBenchmark results:")
+            print(f"  Total time: {total_time:.4f}s")
+            print(f"  Average time per query: {avg_time:.4f}s")
+            print(f"  Queries per second: {1 / avg_time:.2f}")
+
+            # Show the last result
+            if args.json:
+                print(f"\nLast result: {json.dumps(result, indent=2)}")
+            else:
+                print(f"\nLast result: {result}")
+
+            return 0
+
+        # Standard single run
+        start_time = time.time()
+
+        # Generate SQL using the appropriate function
+        if args.json:
+            result = generate_func(
+                prompt=args.question,
+                schema_context=schema_context,
+                model_name=args.model,
+                max_tokens=args.max_tokens,
+                temperature=args.temperature,
+                device=device,
+            )
+            # Print results
+            print(f"\n=== Generated SQL (in {time.time() - start_time:.4f}s) ===")
+            print(json.dumps(result, indent=2))
+
+        elif args.candidates > 1:
+            sql_candidates = generate_func(
+                question=args.question,
+                schema_context=schema_context,
+                model_name=args.model,
+                max_tokens=args.max_tokens,
+                temperature=args.temperature,
+                num_candidates=args.candidates,
+                device=device,
+            )
+
+            # Handle both string and list return types
+            if isinstance(sql_candidates, str):
+                sql_candidates = [sql_candidates]
+
+            # Print results
+            print(f"\n=== Generated SQL (in {time.time() - start_time:.4f}s) ===")
+            for i, sql in enumerate(sql_candidates):
+                print(f"\nCandidate {i + 1}:")
+                print(f"{sql}")
+
+            # Validate first SQL
+            print("\n=== SQL Validation ===")
+            syntax_valid = validate_sql_syntax(sql_candidates[0])
+            print(f"Syntax check: {'PASS' if syntax_valid else 'FAIL'}")
+
+        else:
+            sql = generate_func(
+                prompt=args.question,
+                schema_context=schema_context,
+                model_name=args.model,
+                max_tokens=args.max_tokens,
+                temperature=args.temperature,
+                device=device,
+            )
+
+            # Print results
+            print(f"\n=== Generated SQL (in {time.time() - start_time:.4f}s) ===")
+            print(sql)
+
+            # Validate SQL
+            print("\n=== SQL Validation ===")
+            syntax_valid = validate_sql_syntax(sql)
+            print(f"Syntax check: {'PASS' if syntax_valid else 'FAIL'}")
 
     except Exception as e:
         print(f"Error generating SQL: {e}")
