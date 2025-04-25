@@ -2,15 +2,15 @@
 LLM SQL Generator Module
 
 This module provides functionality to generate SQL queries from natural language
-using Hugging Face Transformer models.
+using Hugging Face Transformer models optimized for sequence-to-sequence tasks.
 """
 
 import logging
 import re
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 # Configure logging
 logging.basicConfig(
@@ -21,56 +21,77 @@ logger = logging.getLogger(__name__)
 
 class HuggingFaceSQLGenerator:
     """
-    A class to generate SQL queries from natural language using Hugging Face models.
+    A class to generate SQL queries from natural language using Hugging Face seq2seq models.
+    Optimized for T5/BART models fine-tuned on text-to-SQL tasks.
     """
 
     def __init__(
         self,
-        model_name: str = "TheBloke/Llama-2-7B-Chat-GGUF",
+        model_name: str = "Salesforce/codet5-base-sql",
         device: str = None,
-        max_tokens: int = 1024,
-        temperature: float = 0.7,
-        use_pipeline: bool = True,
+        max_tokens: int = 256,
+        temperature: float = 0.3,
+        batch_size: int = 1,
         **kwargs,
     ):
         """
-        Initialize the HuggingFaceSQLGenerator.
+        Initialize the HuggingFaceSQLGenerator with a seq2seq model optimized for SQL generation.
 
         Args:
-            model_name (str): Name of the Hugging Face model to use.
-            device (str, optional): Device to run the model on, e.g. 'cuda:0', 'cpu'.
-                                    If None, will use CUDA if available, else CPU.
+            model_name (str): Name of the Hugging Face model to use (seq2seq model fine-tuned on SQL).
+                Recommended models: 'Salesforce/codet5-base-sql', 'tscholak/1rpp-sql-base'.
+            device (str, optional): Device to run the model on, e.g., 'cuda:0', 'cpu'.
+                If None, will use CUDA if available, else CPU.
             max_tokens (int): Maximum tokens for the model's output.
             temperature (float): Temperature for text generation (higher = more random).
-            use_pipeline (bool): Whether to use the pipeline API (True) or
-                                 load model and tokenizer separately (False).
-            **kwargs: Additional arguments to pass to the model or pipeline.
+            batch_size (int): Batch size for inference. Larger values may improve throughput
+                              when processing multiple queries.
+            **kwargs: Additional arguments to pass to the model or tokenizer load functions.
         """
         self.model_name = model_name
         self.max_tokens = max_tokens
         self.temperature = temperature
-        self.use_pipeline = use_pipeline
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.batch_size = batch_size
+
+        # Determine device with more detailed GPU detection
+        if device is None:
+            if torch.cuda.is_available():
+                # Automatically use all available GPUs
+                self.device = "cuda"
+                logger.info(
+                    f"CUDA available with {torch.cuda.device_count()} device(s)"
+                )
+                logger.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
+            else:
+                self.device = "cpu"
+                logger.info("CUDA not available, using CPU")
+        else:
+            self.device = device
 
         logger.info(f"Initializing HuggingFaceSQLGenerator with model {model_name}")
         logger.info(f"Using device: {self.device}")
 
+        # Set device_map to auto for efficient multi-GPU usage
+        device_map = (
+            "auto"
+            if self.device == "cuda" and torch.cuda.device_count() > 1
+            else self.device
+        )
+
         try:
-            if use_pipeline:
-                logger.info("Using transformers pipeline API")
-                self.model = pipeline(
-                    "text-generation",
-                    model=model_name,
-                    device=self.device,
-                    **kwargs,
-                )
-                self.tokenizer = None  # Not directly accessible in pipeline mode
-            else:
-                logger.info("Loading model and tokenizer separately")
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_name, device_map=self.device, **kwargs
-                )
+            # Load tokenizer and model
+            logger.info("Loading tokenizer...")
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, **kwargs)
+
+            logger.info(f"Loading model with device_map={device_map}...")
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(
+                model_name,
+                device_map=device_map,
+                torch_dtype=torch.float16
+                if self.device == "cuda"
+                else torch.float32,  # Use fp16 for GPU
+                **kwargs,
+            )
 
             logger.info("Model and tokenizer initialized successfully")
         except Exception as e:
@@ -110,17 +131,18 @@ class HuggingFaceSQLGenerator:
         # Construct the prompt
         prompt = self._build_prompt(question, schema_context)
 
+        # Truncate if needed (model specific - T5/BART typically have 512-1024 token limits)
+        max_input_length = 512  # Conservative for most models
+        if len(prompt.split()) > max_input_length:
+            logger.warning(
+                f"Prompt may exceed model's context window ({len(prompt.split())} tokens). Truncating..."
+            )
+            # For seq2seq models, we need to keep most relevant parts
+            # This is a simple approach; more sophisticated truncation could be implemented
+            prompt = self._truncate_prompt(prompt, max_input_length)
+
         # Get model outputs
         try:
-            if len(prompt) > 6000:  # A conservative limit
-                logger.warning(
-                    "Prompt may exceed model's context window. Truncating..."
-                )
-                # Simple truncation strategy - keep beginning and end of prompt
-                head = prompt[:3000]
-                tail = prompt[-3000:]
-                prompt = f"{head}\n...\n{tail}"
-
             outputs = self._generate_text(
                 prompt,
                 max_tokens=max_tokens,
@@ -142,7 +164,7 @@ class HuggingFaceSQLGenerator:
             logger.error(f"Error generating SQL: {e}")
             if isinstance(e, torch.cuda.OutOfMemoryError):
                 logger.error(
-                    "CUDA out of memory. Try reducing the prompt size or using CPU."
+                    "CUDA out of memory. Try reducing the prompt size or batch size."
                 )
 
             # Return a placeholder on error
@@ -151,7 +173,7 @@ class HuggingFaceSQLGenerator:
 
     def _build_prompt(self, question: str, schema_context: Optional[str] = None) -> str:
         """
-        Build a prompt for the LLM.
+        Build a prompt for the seq2seq model.
 
         Args:
             question (str): Natural language question.
@@ -160,22 +182,53 @@ class HuggingFaceSQLGenerator:
         Returns:
             str: Constructed prompt.
         """
-        # Build basic prompt
-        prompt_parts = [
-            "You are a SQL expert. Generate a SQL query for the following question.",
-            "QUESTION: " + question,
-        ]
+        # For seq2seq models fine-tuned on SQL tasks, we need to format
+        # according to the model's training data format
 
-        # Add schema context if provided
+        # Default format for many text-to-SQL models: schema followed by question
         if schema_context:
-            prompt_parts.insert(1, "SCHEMA:\n" + schema_context)
+            return f"Schema: {schema_context}\nQuestion: {question}"
 
-        # Add guidance on output format
-        prompt_parts.append(
-            "Provide only the SQL query without any explanations. Ensure the SQL is valid and optimized."
-        )
+        return f"Question: {question}"
 
-        return "\n\n".join(prompt_parts)
+    def _truncate_prompt(self, prompt: str, max_length: int) -> str:
+        """
+        Truncate prompt to fit model's context window.
+
+        Args:
+            prompt (str): Input prompt.
+            max_length (int): Maximum number of tokens to keep.
+
+        Returns:
+            str: Truncated prompt.
+        """
+        words = prompt.split()
+
+        if len(words) <= max_length:
+            return prompt
+
+        # For schema + question format, keep beginning (schema) and end (question)
+        if "Question:" in prompt:
+            # Split into schema and question parts
+            parts = prompt.split("Question:")
+            schema_part = parts[0]
+            question_part = "Question:" + parts[1]
+
+            schema_words = schema_part.split()
+            question_words = question_part.split()
+
+            # If question is already too long, truncate it
+            if len(question_words) >= max_length:
+                return " ".join(question_words[:max_length])
+
+            # Allocate tokens between schema and question
+            schema_tokens = max_length - len(question_words)
+            return " ".join(schema_words[:schema_tokens]) + " " + question_part
+
+        # Simple truncation for other formats - keep beginning and end
+        beginning = words[: max_length // 2]
+        end = words[-(max_length // 2) :]
+        return " ".join(beginning + end)
 
     def _generate_text(
         self,
@@ -186,7 +239,7 @@ class HuggingFaceSQLGenerator:
         **kwargs,
     ) -> Union[str, List[str]]:
         """
-        Generate text using the LLM.
+        Generate text using the seq2seq model.
 
         Args:
             prompt (str): Input prompt.
@@ -198,67 +251,50 @@ class HuggingFaceSQLGenerator:
         Returns:
             Union[str, List[str]]: Generated text or list of generated texts.
         """
-        logger.info(f"Generating SQL with prompt of length {len(prompt)}")
+        logger.info(
+            f"Generating SQL with prompt of length {len(prompt.split())} tokens"
+        )
 
-        if self.use_pipeline:
-            # Handle pipeline API
-            generation_config = {
-                "max_new_tokens": max_tokens,
-                "temperature": temperature,
-                "num_return_sequences": num_candidates,
-                "do_sample": temperature > 0,
-                **kwargs,
-            }
+        # Tokenize input
+        inputs = self.tokenizer(
+            prompt, return_tensors="pt", truncation=True, max_length=512
+        )
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-            outputs = self.model(
-                prompt,
-                **generation_config,
+        # Build generation config
+        generation_config = {
+            "max_length": self.tokenizer.model_max_length
+            if hasattr(self.tokenizer, "model_max_length")
+            else 512,
+            "max_new_tokens": max_tokens,
+            "min_length": 10,  # Avoid empty or too short responses
+            "temperature": temperature,
+            "num_return_sequences": num_candidates,
+            "do_sample": temperature > 0,
+            **kwargs,
+        }
+
+        # Generate with no_grad for inference
+        with torch.no_grad():
+            # Apply half-precision for faster inference on GPU if supported
+            if self.device == "cuda":
+                with torch.cuda.amp.autocast():
+                    outputs = self.model.generate(**inputs, **generation_config)
+            else:
+                outputs = self.model.generate(**inputs, **generation_config)
+
+        # Decode outputs
+        decoded_outputs = [
+            self.tokenizer.decode(
+                output, skip_special_tokens=True, clean_up_tokenization_spaces=True
             )
+            for output in outputs
+        ]
 
-            # Extract generated text from outputs
-            if num_candidates > 1:
-                return [
-                    output["generated_text"][len(prompt) :].strip()
-                    for output in outputs
-                ]
-            else:
-                return outputs[0]["generated_text"][len(prompt) :].strip()
-
+        if num_candidates > 1:
+            return decoded_outputs
         else:
-            # Handle direct model + tokenizer API
-            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-
-            generation_config = {
-                "max_new_tokens": max_tokens,
-                "temperature": temperature,
-                "num_return_sequences": num_candidates,
-                "do_sample": temperature > 0,
-                "pad_token_id": self.tokenizer.eos_token_id,  # For models without pad token
-                **kwargs,
-            }
-
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    **generation_config,
-                )
-
-            # Decode outputs
-            decoded_outputs = [
-                self.tokenizer.decode(output, skip_special_tokens=True)
-                for output in outputs
-            ]
-
-            # Remove the prompt from each output
-            prompt_len = len(prompt)
-            processed_outputs = [
-                output[prompt_len:].strip() for output in decoded_outputs
-            ]
-
-            if num_candidates > 1:
-                return processed_outputs
-            else:
-                return processed_outputs[0]
+            return decoded_outputs[0]
 
     def _extract_sql(self, text: str) -> str:
         """
@@ -309,22 +345,111 @@ class HuggingFaceSQLGenerator:
         return text.strip()
 
 
+def generate_sql_from_text(
+    prompt: str,
+    schema_context: Optional[str] = None,
+    model_name: str = "Salesforce/codet5-base-sql",
+    max_tokens: int = 256,
+    temperature: float = 0.3,
+    device: str = None,
+    **kwargs,
+) -> str:
+    """
+    Generate SQL from a natural language question.
+
+    This stateless function is optimized for use in concurrent environments
+    like web backends (FastAPI, Flask). It loads the model if needed and
+    performs inference in a thread-safe manner.
+
+    Args:
+        prompt (str): Natural language question or prompt.
+        schema_context (Optional[str]): Database schema or context to include with the prompt.
+        model_name (str): Name of the Hugging Face seq2seq model to use.
+            Recommended models: 'Salesforce/codet5-base-sql', 'tscholak/1rpp-sql-base'.
+        max_tokens (int): Maximum tokens to generate in the response.
+        temperature (float): Temperature for text generation. Lower values produce
+                            more deterministic outputs.
+        device (str, optional): Device to run the model on. If None, will use CUDA if
+                               available, else CPU. Can be 'cuda', 'cpu', or specific GPU
+                               like 'cuda:0'.
+        **kwargs: Additional arguments to pass to the model initialization or generation.
+
+    Returns:
+        str: Generated SQL query as a string.
+    """
+    generator = HuggingFaceSQLGenerator(
+        model_name=model_name,
+        device=device,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        **kwargs,
+    )
+
+    sql = generator.generate_sql(
+        question=prompt,
+        schema_context=schema_context,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        **kwargs,
+    )
+
+    return sql
+
+
+def generate_sql_json_response(
+    prompt: str,
+    schema_context: Optional[str] = None,
+    model_name: str = "Salesforce/codet5-base-sql",
+    max_tokens: int = 256,
+    temperature: float = 0.3,
+    device: str = None,
+    **kwargs,
+) -> Dict[str, str]:
+    """
+    Generate SQL and return in JSON format compatible with the existing API.
+
+    Args:
+        prompt (str): Natural language question or prompt.
+        schema_context (Optional[str]): Database schema or context to include with the prompt.
+        model_name (str): Name of the Hugging Face seq2seq model to use.
+        max_tokens (int): Maximum tokens to generate in the response.
+        temperature (float): Temperature for text generation.
+        device (str, optional): Device to run the model on.
+        **kwargs: Additional arguments to pass to the model initialization or generation.
+
+    Returns:
+        Dict[str, str]: JSON-compatible dictionary with the generated SQL query.
+    """
+    sql = generate_sql_from_text(
+        prompt=prompt,
+        schema_context=schema_context,
+        model_name=model_name,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        device=device,
+        **kwargs,
+    )
+
+    return {"sql": sql}
+
+
+# For backward compatibility with existing code
 def generate_sql_from_llm(
     question: str,
     schema_context: Optional[str] = None,
-    model_name: str = "TheBloke/Llama-2-7B-Chat-GGUF",
-    max_tokens: int = 1024,
-    temperature: float = 0.7,
+    model_name: str = "Salesforce/codet5-base-sql",
+    max_tokens: int = 256,
+    temperature: float = 0.3,
     num_candidates: int = 1,
     clean_output: bool = True,
     device: str = None,
-    use_pipeline: bool = True,
     **kwargs,
 ) -> Union[str, List[str]]:
     """
-    Generate SQL from a natural language question using a Hugging Face model.
+    Generate SQL from a natural language question using a Hugging Face seq2seq model.
 
-    This is a convenient wrapper around the HuggingFaceSQLGenerator class.
+    This function maintains compatibility with the existing API while using
+    the new seq2seq-based implementation underneath.
 
     Args:
         question (str): Natural language question.
@@ -334,9 +459,7 @@ def generate_sql_from_llm(
         temperature (float): Temperature for text generation.
         num_candidates (int): Number of SQL candidates to generate.
         clean_output (bool): Whether to clean and extract SQL from model output.
-        device (str, optional): Device to run the model on, e.g. 'cuda:0', 'cpu'.
-        use_pipeline (bool): Whether to use the pipeline API (True) or
-                             load model and tokenizer separately (False).
+        device (str, optional): Device to run the model on e.g., 'cuda:0', 'cpu'.
         **kwargs: Additional arguments to pass to the model initialization or generation.
 
     Returns:
@@ -347,7 +470,6 @@ def generate_sql_from_llm(
         device=device,
         max_tokens=max_tokens,
         temperature=temperature,
-        use_pipeline=use_pipeline,
         **kwargs,
     )
 
@@ -369,17 +491,18 @@ if __name__ == "__main__":
     schema = """
     Table: products
     Columns: id (INT), name (VARCHAR), price (DECIMAL), category_id (INT)
-    
+
     Table: categories
     Columns: id (INT), name (VARCHAR)
-    
+
     Relationship: products.category_id -> categories.id
     """
 
-    sql = generate_sql_from_llm(
-        question=question,
+    # Generate SQL using the new function
+    sql = generate_sql_from_text(
+        prompt=question,
         schema_context=schema,
-        model_name="TheBloke/Llama-2-7B-Chat-GGUF",
+        model_name="Salesforce/codet5-base-sql",
         temperature=0.3,
     )
 
