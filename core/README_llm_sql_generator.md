@@ -1,165 +1,158 @@
-# Hugging Face LLM SQL Generator for Alb-SQL
+# LLM SQL Generator
 
-This module provides functionality to generate SQL queries from natural language using Hugging Face Transformer models.
+The LLM SQL Generator module provides functionality to translate natural language queries into SQL statements using local Hugging Face transformer models fine-tuned on text-to-SQL tasks.
 
 ## Overview
 
-The `llm_sql_generator.py` module adds support for generating SQL queries using locally hosted Hugging Face models, providing a more customizable and privacy-focused alternative to remote API-based LLMs.
+This module replaces the previous cloud-based LLM API approach with a local Hugging Face model. The implementation focuses on:
 
-## Features
+1. Using lightweight, performant seq2seq models (T5/BART based) fine-tuned on text-to-SQL tasks
+2. Supporting GPU acceleration with NVIDIA hardware
+3. Maintaining the same API interface for backward compatibility
+4. Optimizing for concurrent use in web backends (FastAPI, Flask)
 
-- Support for various Hugging Face models (e.g., Llama-2, Mistral, CodeLlama)
-- Configurable generation parameters (temperature, max tokens, etc.)
-- Multiple candidate generation
-- GPU/CPU compatibility
-- Automatic SQL extraction from model outputs
-- Error handling and graceful fallbacks
+## Model Selection
 
-## Installation
+The system works with seq2seq models fine-tuned on SQL generation tasks. Recommended models include:
 
-Ensure you have the required dependencies by running:
+- **Salesforce/codet5-base-sql** (default) - A CodeT5 model fine-tuned on SQL generation tasks
+- **tscholak/1rpp-sql-base** - A T5-based model trained on Spider dataset
+- **mrm8488/t5-base-finetuned-wikisql** - T5 model for simpler SQL queries
 
-```bash
-pip install transformers torch
+Models are chosen for their balance of performance, size, and accuracy. The system prefers smaller models (< 1GB) for faster response times in production environments.
+
+## Key Components
+
+### HuggingFaceSQLGenerator
+
+The core class that manages model initialization and SQL generation:
+
+```python
+generator = HuggingFaceSQLGenerator(
+    model_name="Salesforce/codet5-base-sql",
+    device="cuda",  # or specific GPU: "cuda:0"
+    max_tokens=256,
+    temperature=0.3,
+    batch_size=1
+)
+
+sql = generator.generate_sql(
+    question="Find all users who registered in the last month",
+    schema_context="Table: users\nColumns: id, name, email, registration_date"
+)
 ```
 
-These dependencies are already included in the project's `requirements.txt`.
+### Public Functions
 
-## Usage
+#### generate_sql_from_text
 
-### Using within Alb-SQL
+A stateless function designed for use in concurrent web backends:
 
-The Alb-SQL system has been configured to use the Hugging Face SQL generator automatically. You don't need to make any changes to the code to utilize this functionality - the system will use it in the `_generate_sql_candidates` method.
+```python
+from core.llm_sql_generator import generate_sql_from_text
 
-You can adjust the model and parameters by modifying the appropriate variables in the method.
+sql = generate_sql_from_text(
+    prompt="What are the top 5 selling products?",
+    schema_context="Table: products\nColumns: id, name, price, sales_count",
+    model_name="Salesforce/codet5-base-sql",
+    device="cuda"
+)
+```
 
-### Direct Function Usage
+#### generate_sql_json_response
 
-For direct usage, you can call the `generate_sql_from_llm` function:
+Returns SQL in a JSON format compatible with the original API:
+
+```python
+from core.llm_sql_generator import generate_sql_json_response
+
+response = generate_sql_json_response(
+    prompt="Find users who placed more than 3 orders",
+    schema_context="Table: users\nColumns: id, name\nTable: orders\nColumns: id, user_id, date"
+)
+
+# Returns: {"sql": "SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id GROUP BY u.id HAVING COUNT(*) > 3"}
+```
+
+#### generate_sql_from_llm (Backward Compatibility)
+
+Maintains compatibility with the previous API:
 
 ```python
 from core.llm_sql_generator import generate_sql_from_llm
 
 sql = generate_sql_from_llm(
-    question="What is the average salary of employees?",
-    schema_context="Table: employees\nColumns: id (INT), name (VARCHAR), salary (DECIMAL)",
-    model_name="TheBloke/Llama-2-7B-Chat-GGUF",
-    temperature=0.3,
-    max_tokens=512,
-    num_candidates=1
+    question="What's the average order value?",
+    schema_context="Table: orders\nColumns: id, total_value, customer_id",
+    model_name="Salesforce/codet5-base-sql"
 )
-
-print(f"Generated SQL: {sql}")
 ```
 
-### Command-line Interface
+## GPU Optimization
 
-An example command-line script is provided in `examples/generate_sql_with_hf.py`:
+The implementation includes several optimizations for NVIDIA GPUs:
 
-```bash
-# Basic usage
-python examples/generate_sql_with_hf.py "What is the average salary of employees?"
+1. **Automatic GPU detection** - Uses CUDA when available and falls back to CPU
+2. **Half-precision inference** (FP16) - For faster GPU execution
+3. **Multi-GPU support** with `device_map="auto"` if multiple GPUs are detected
+4. **Batch processing** capability for handling multiple queries concurrently
 
-# With schema file
-python examples/generate_sql_with_hf.py "What is the average salary of employees?" --schema my_schema.json
+## Scaling and Performance Considerations
 
-# With custom model and parameters
-python examples/generate_sql_with_hf.py "What is the average salary of employees?" \
-    --model HuggingFaceH4/zephyr-7b-beta \
-    --temperature 0.5 \
-    --max-tokens 1024 \
-    --candidates 3
+- **Memory Usage**: The default models require ~1-2GB of VRAM/RAM
+- **Latency**: ~200-500ms per query on GPU, ~1-2s on CPU
+- **Concurrent Requests**: Multiple queries can be processed in parallel on multi-core CPUs or GPUs
+- **Tokenizer Cache**: The implementation maintains tokenizer efficiency across requests
+
+## Schema Context Handling
+
+The module accepts database schema as a string context which helps the model generate more accurate SQL:
+
+```
+Schema: 
+Table: users
+Columns: id (INT), name (VARCHAR), email (VARCHAR), signup_date (DATE)
+
+Table: orders
+Columns: id (INT), user_id (INT), total (DECIMAL), order_date (DATE)
+
+Relationship: orders.user_id -> users.id
 ```
 
-## Class Usage
+The system handles schema truncation to fit within model context limits while prioritizing question content.
 
-For more control, you can use the `HuggingFaceSQLGenerator` class directly:
+## Error Handling
+
+The implementation includes robust error handling:
+
+- CUDA out-of-memory detection with fallback options
+- Prompt truncation for oversized inputs
+- Graceful error messages embedded in SQL comments
+- Exception capture to prevent API failures
+
+## Usage in Web Backends
+
+Example FastAPI integration:
 
 ```python
-from core.llm_sql_generator import HuggingFaceSQLGenerator
+from fastapi import FastAPI
+from pydantic import BaseModel
+from core.llm_sql_generator import generate_sql_json_response
 
-# Initialize with custom configuration
-generator = HuggingFaceSQLGenerator(
-    model_name="TheBloke/Llama-2-7B-Chat-GGUF",
-    device="cuda:0",  # Specify GPU device if available
-    max_tokens=1024,
-    temperature=0.7,
-    use_pipeline=True,  # Set to False to use AutoModelForCausalLM + AutoTokenizer directly
-)
+app = FastAPI()
 
-# Generate SQL
-sql = generator.generate_sql(
-    question="What is the average salary of employees?",
-    schema_context="Table: employees\nColumns: id (INT), name (VARCHAR), salary (DECIMAL)",
-    num_candidates=3,
-    clean_output=True  # Extract SQL from model output
-)
+class SQLRequest(BaseModel):
+    question: str
+    schema: str = None
 
-print(f"Generated SQL: {sql}")
+@app.post("/generate-sql")
+async def generate_sql(request: SQLRequest):
+    return generate_sql_json_response(
+        prompt=request.question,
+        schema_context=request.schema
+    )
 ```
 
-## API Reference
+## Testing
 
-### generate_sql_from_llm
-
-```python
-def generate_sql_from_llm(
-    question: str,
-    schema_context: Optional[str] = None,
-    model_name: str = "TheBloke/Llama-2-7B-Chat-GGUF",
-    max_tokens: int = 1024,
-    temperature: float = 0.7,
-    num_candidates: int = 1,
-    clean_output: bool = True,
-    device: str = None,
-    use_pipeline: bool = True,
-    **kwargs,
-) -> Union[str, List[str]]
-```
-
-Generates SQL from a natural language question using a Hugging Face model.
-
-**Parameters:**
-- `question`: Natural language question.
-- `schema_context`: Database schema or context (optional).
-- `model_name`: Name of the Hugging Face model to use.
-- `max_tokens`: Maximum tokens for generation.
-- `temperature`: Temperature for text generation (higher = more random).
-- `num_candidates`: Number of SQL candidates to generate.
-- `clean_output`: Whether to clean and extract SQL from model output.
-- `device`: Device to run the model on (e.g., 'cuda:0', 'cpu').
-- `use_pipeline`: Whether to use the transformers pipeline API.
-- `**kwargs`: Additional arguments to pass to the model.
-
-**Returns:**
-- Generated SQL query or list of candidate queries.
-
-### HuggingFaceSQLGenerator
-
-The class that handles SQL generation using Hugging Face models.
-
-**Main Methods:**
-
-- `__init__`: Initialize the generator with model configuration.
-- `generate_sql`: Generate SQL from a natural language question.
-- `_build_prompt`: Build a prompt for the LLM.
-- `_generate_text`: Generate text using the LLM.
-- `_extract_sql`: Extract SQL query from model output.
-
-## Recommended Models
-
-The following Hugging Face models are recommended for SQL generation:
-
-- `TheBloke/Llama-2-7B-Chat-GGUF`: Good balance of performance and resource usage
-- `TheBloke/CodeLlama-7B-GGUF`: Specialized for code generation
-- `HuggingFaceH4/zephyr-7b-beta`: Strong performance on text-to-SQL tasks
-- `mistralai/Mistral-7B-Instruct-v0.2`: Strong general purpose model
-
-## Troubleshooting
-
-Common issues:
-
-1. **CUDA out of memory**: Reduce the model size or use `device="cpu"`.
-2. **Model not found**: Verify the model name and check your internet connection.
-3. **Poor SQL quality**: Try adjusting the temperature (lower for more deterministic outputs), or use a different model.
-4. **Slow performance**: Consider using a smaller model or quantized version.
+The module includes comprehensive unit tests that can be run without requiring actual model downloads, using mock objects to simulate model behavior.
