@@ -6,11 +6,16 @@ using Hugging Face Transformer models optimized for sequence-to-sequence tasks.
 """
 
 import logging
+import os  # Added for environment variables
 import re
 from typing import Dict, List, Optional, Union
 
 import torch
+from dotenv import load_dotenv  # Added for loading .env file
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -27,7 +32,7 @@ class HuggingFaceSQLGenerator:
 
     def __init__(
         self,
-        model_name: str = "Salesforce/codet5-base-sql",
+        model_name: str = "defog/sqlcoder",
         device: str = None,
         max_tokens: int = 256,
         temperature: float = 0.3,
@@ -52,6 +57,7 @@ class HuggingFaceSQLGenerator:
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.batch_size = batch_size
+        self.hf_token = os.getenv("HF_TOKEN")  # Load token from environment
 
         # Determine device with more detailed GPU detection
         if device is None:
@@ -81,16 +87,26 @@ class HuggingFaceSQLGenerator:
         try:
             # Load tokenizer and model
             logger.info("Loading tokenizer...")
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name, **kwargs)
+            # Pass token if available
+            tokenizer_kwargs = (
+                {**kwargs, "token": self.hf_token} if self.hf_token else kwargs
+            )
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_name, **tokenizer_kwargs
+            )
 
             logger.info(f"Loading model with device_map={device_map}...")
+            # Pass token if available
+            model_kwargs = (
+                {**kwargs, "token": self.hf_token} if self.hf_token else kwargs
+            )
             self.model = AutoModelForSeq2SeqLM.from_pretrained(
                 model_name,
                 device_map=device_map,
-                torch_dtype=torch.float16
-                if self.device == "cuda"
-                else torch.float32,  # Use fp16 for GPU
-                **kwargs,
+                torch_dtype=(
+                    torch.float16 if self.device == "cuda" else torch.float32
+                ),  # Use fp16 for GPU
+                **model_kwargs,
             )
 
             logger.info("Model and tokenizer initialized successfully")
@@ -263,9 +279,11 @@ class HuggingFaceSQLGenerator:
 
         # Build generation config
         generation_config = {
-            "max_length": self.tokenizer.model_max_length
-            if hasattr(self.tokenizer, "model_max_length")
-            else 512,
+            "max_length": (
+                self.tokenizer.model_max_length
+                if hasattr(self.tokenizer, "model_max_length")
+                else 512
+            ),
             "max_new_tokens": max_tokens,
             "min_length": 10,  # Avoid empty or too short responses
             "temperature": temperature,
