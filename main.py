@@ -413,10 +413,10 @@ class AlbSQL:
 
             # Generate SQL using the Hugging Face model
             model_configs = {
-                "model_name": "TheBloke/Llama-2-7B-Chat-GGUF",  # Default model
-                "temperature": 0.3
-                if num_candidates == 1
-                else 0.7,  # Lower temp for precision
+                "model_name": "tscholak/1rpp-sql-base",  # Trying another recommended SQL model
+                "temperature": (
+                    0.3 if num_candidates == 1 else 0.7
+                ),  # Lower temp for precision
                 "max_tokens": 512,  # Reasonable size for SQL queries
                 "num_candidates": num_candidates,
                 "clean_output": True,  # Clean and extract SQL
@@ -449,7 +449,7 @@ class AlbSQL:
             logger.error(f"Error generating SQL with HuggingFace model: {e}")
             # Fall back to placeholder SQL for demo purposes
             return [
-                "SELECT * FROM users LIMIT 10",
+                "SELECT * FROM users LIMIT 10",  # Reverted to original fallback
                 "SELECT u.name, COUNT(o.id) FROM users u JOIN orders o ON u.id = o.user_id GROUP BY u.name",
                 "SELECT p.name, AVG(oi.price) FROM products p JOIN order_items oi ON p.id = oi.product_id GROUP BY p.name",
             ][:num_candidates]
