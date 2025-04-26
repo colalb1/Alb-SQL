@@ -90,43 +90,80 @@ def extract_tables(sql: str) -> Set[str]:
 
 def extract_columns(sql: str) -> Set[str]:
     """
-    Extract column names from a SQL query.
+    Extract column names from a SQL query using sqlparse structure.
 
     Args:
         sql (str): SQL query.
 
     Returns:
-        Set of column names.
+        Set of column names (lowercase).
     """
-    # Parse SQL
     parsed = sqlparse.parse(sql)[0]
     columns = set()
 
-    # Find SELECT statements and extract column references
-    select_seen = False
-
-    for token in parsed.flatten():
-        if token.value.upper() == "SELECT":
-            select_seen = True
-            continue
-
-        if select_seen and token.value.upper() in (
-            "FROM",
-            "WHERE",
-            "GROUP",
-            "HAVING",
-            "ORDER",
-            "LIMIT",
+    # Iterate through top-level tokens. We are looking for Statement objects.
+    for stmt_candidate in parsed.tokens:
+        # Check if it's a Statement object and specifically a SELECT statement
+        if (
+            isinstance(stmt_candidate, sqlparse.sql.Statement)
+            and stmt_candidate.get_type() == "SELECT"
         ):
-            select_seen = False
-            continue
+            identifier_list_found = False
+            # Iterate through tokens *within* the identified SELECT statement
+            for token in stmt_candidate.tokens:
+                # Found the list of columns/expressions
+                if isinstance(token, sqlparse.sql.IdentifierList):
+                    identifier_list_found = True
+                    for identifier in token.get_identifiers():
+                        # Use get_real_name() to handle aliases like 'col as alias' -> 'col'
+                        # For functions like COUNT(*), get_real_name() might be None
+                        real_name = identifier.get_real_name()
 
-        if select_seen and token.ttype == sqlparse.tokens.Name:
-            # Remove table aliases
-            col = token.value.lower()
-            if "." in col:
-                col = col.split(".")[-1]
-            columns.add(col)
+                        if real_name:
+                            val = real_name
+                            # Handle qualified names like 'table.col' -> 'col'
+                            # Check if it's a simple identifier before splitting
+                            if "." in val and isinstance(
+                                identifier, sqlparse.sql.Identifier
+                            ):
+                                # Avoid splitting function calls like schema.func()
+                                is_function = any(
+                                    isinstance(t, sqlparse.sql.Function)
+                                    for t in identifier.tokens
+                                )
+                                if not is_function:
+                                    val = val.split(".")[-1]
+                        else:
+                            # Fallback for '*' or complex expressions/functions without aliases
+                            val = identifier.value
+                            # If it's a wildcard token specifically
+                            if identifier.ttype == sqlparse.tokens.Wildcard:
+                                val = "*"  # Ensure consistency
+
+                        columns.add(val.lower())
+                    break  # Processed the main identifier list
+
+            # Handle simple 'SELECT *' case if IdentifierList wasn't found or didn't contain '*'
+            if not identifier_list_found or "*" not in columns:
+                is_select_star = False
+                select_token_idx = -1
+                # Find SELECT token index
+                for idx, token in enumerate(stmt.tokens):
+                    if token.value.upper() == "SELECT":
+                        select_token_idx = idx
+                        break
+                # Check token immediately after SELECT (ignoring whitespace)
+                if select_token_idx != -1:
+                    next_significant_token = None
+                    for next_idx in range(select_token_idx + 1, len(stmt.tokens)):
+                        if not stmt.tokens[next_idx].is_whitespace:
+                            next_significant_token = stmt.tokens[next_idx]
+                            break
+                    if (
+                        next_significant_token
+                        and next_significant_token.ttype == sqlparse.tokens.Wildcard
+                    ):
+                        columns.add("*")
 
     return columns
 
