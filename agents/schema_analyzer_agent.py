@@ -14,7 +14,8 @@ from typing import Dict, List, Optional, Tuple, Union
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class ColumnInfo:
     sample_values: List[str] = field(default_factory=list)
     constraints: List[str] = field(default_factory=list)
     stats: Dict[str, Union[float, int, str]] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)  # Added missing tags attribute
 
 
 @dataclass
@@ -530,14 +532,18 @@ class SchemaAnalyzerAgent:
         schema_info: SchemaInfo,
         target_tables: Optional[List[str]] = None,
         detail_level: str = "medium",
+        include_sample_data: bool = True,  # Added parameter
     ) -> str:
         """
         Generate a human-readable summary of the schema.
 
         Args:
             schema_info (SchemaInfo): SchemaInfo containing schema information.
-            target_tables (Optional[List[str]]): Optional list of tables to include in the summary.
-            detail_level (str): Level of detail to include ('low', 'medium', 'high').
+            target_tables (Optional[List[str]]): Optional list of tables to
+                include in the summary.
+            detail_level (str): Level of detail to include
+                ('low', 'medium', 'high').
+            include_sample_data (bool): Whether to include sample data for high detail.
 
         Returns:
             Human-readable schema summary.
@@ -571,13 +577,20 @@ class SchemaAnalyzerAgent:
                 if column_info.is_primary_key:
                     line += " [PK]"
                 if column_info.is_foreign_key:
-                    line += f" [FK -> {column_info.referenced_table}.{column_info.referenced_column}]"
+                    line += (
+                        f" [FK -> {column_info.referenced_table}."
+                        f"{column_info.referenced_column}]"
+                    )
                 if not column_info.nullable:
                     line += " [NOT NULL]"
                 summary.append(line)
 
-                # Add sample values for high detail level
-                if detail_level == "high" and column_info.sample_values:
+                # Add sample values for high detail level if requested
+                if (
+                    detail_level == "high"
+                    and include_sample_data
+                    and column_info.sample_values
+                ):
                     sample_str = ", ".join(column_info.sample_values[:3])
                     summary.append(f"    Sample values: {sample_str}")
 
@@ -587,7 +600,7 @@ class SchemaAnalyzerAgent:
             for src_table, src_col, dst_table, dst_col in schema_info.relationships:
                 if src_table in target_tables and dst_table in target_tables:
                     summary.append(
-                        f"  - {src_table}.{src_col} -> {dst_table}.{dst_col}"
+                        f"  - {src_table}.{src_col} -> " f"{dst_table}.{dst_col}"
                     )
 
         return "\n".join(summary)
