@@ -7,19 +7,21 @@ numpy>=1.20.0
 transformers>=4.30.0
 torch>=2.0.0
 accelerate>=0.20.0  # For device_map="auto" support
-sentencepiece>=0.1.99  # Required for many T5/BART tokenizers
+# sentencepiece>=0.1.99  # Required for many T5/BART tokenizers
 protobuf>=3.20.0  # Compatibility with transformers
 
 # Database connectors (supports multiple database types)
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0  # PostgreSQL
 pymysql>=1.0.0  # MySQL
+sqlparse>=0.4.0  # SQL parsing
 # sqlite3  # Included in Python standard library
 
 # Optional utilities
 pandas>=1.5.0  # For data handling
 matplotlib>=3.5.0  # For visualization
 scikit-learn>=1.0.0  # For embedding functions
+python-dotenv>=0.20.0 # For loading environment variables from .env file
 
 # Development dependencies
 pytest>=7.0.0
