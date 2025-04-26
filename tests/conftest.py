@@ -5,12 +5,18 @@ This file contains fixtures that can be used across all test files.
 """
 
 import json
+import os
+import sys
 from unittest.mock import MagicMock
 
 import pytest
 
+# Add project root to sys.path to allow importing main
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from main import AlbSQL
 
-@pytest.fixture
+
+@pytest.fixture(scope="session")  # Added scope
 def sample_schema_info():
     """
     Fixture providing a sample schema info for an e-commerce database.
@@ -92,7 +98,7 @@ def sample_schema_info():
     return schema_info
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")  # Added scope
 def mock_db_connector():
     """
     Fixture providing a mock database connector.
@@ -138,7 +144,24 @@ def mock_db_connector():
     return connector
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")  # Added scope
+def alb_sql_instance(mock_db_connector):
+    """
+    Fixture providing an instance of the AlbSQL class with a mock connector.
+    """
+    # Note: This will still attempt to load the configured LLM model
+    # which might be slow or fail if the model isn't available/configured correctly.
+    # The mock_db_connector handles database interactions during tests.
+    try:
+        instance = AlbSQL(db_connector=mock_db_connector)
+        # Prevent actual model loading/generation during fixture setup if possible,
+        # depending on how tests use it. For now, just instantiate.
+        return instance
+    except Exception as e:
+        pytest.fail(f"Failed to initialize AlbSQL instance in fixture: {e}")
+
+
+@pytest.fixture(scope="session")  # Added scope
 def sample_bird_dataset():
     """
     Fixture providing a sample of the BIRD dataset format.
@@ -172,7 +195,7 @@ def sample_bird_dataset():
     return dataset
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")  # Added scope
 def sample_ambiguities():
     """
     Fixture providing sample ambiguities.
@@ -202,7 +225,7 @@ def sample_ambiguities():
     return ambiguities
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")  # Added scope
 def sample_embeddings():
     """
     Fixture providing sample schema embeddings.
