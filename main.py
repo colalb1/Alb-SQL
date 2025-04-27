@@ -736,7 +736,7 @@ def load_bird_data(
                     )
 
         # Define expected database path relative to data_dir
-        data["db_base_path"] = os.path.join(data_dir, "databases")
+        data["db_base_path"] = os.path.join(data_dir, "dev_databases")
         logger.info(f"Expecting databases in: {data['db_base_path']}")
 
     except json.JSONDecodeError as e:
