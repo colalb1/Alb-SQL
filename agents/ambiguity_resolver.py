@@ -1,3 +1,7 @@
+# WARNING: This module might be used differently depending on the execution mode
+# selected in main.py (e.g., 'eval' vs 'example'). Ensure compatibility
+# if making changes related to initialization or external dependencies.
+
 """
 Ambiguity Resolver Agent Module
 
@@ -13,7 +17,8 @@ from typing import Dict, List, Optional
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -43,7 +48,8 @@ class Ambiguity:
     options: List[str] = field(default_factory=list)
     resolved_option: Optional[str] = None
     confidence: float = 0.0
-    impact: float = 0.0  # How much resolving this impacts the query correctness
+    # How much resolving this impacts the query correctness
+    impact: float = 0.0
 
 
 @dataclass
@@ -72,7 +78,8 @@ class AmbiguityResolverAgent:
 
         Args:
             schema_analyzer: Schema analyzer to use for schema information.
-            confidence_threshold (float): Threshold for confidence to avoid clarification.
+            confidence_threshold (float): Threshold for confidence to avoid
+                                          clarification.
             max_clarifications (int): Maximum number of clarifications to ask.
         """
         self.schema_analyzer = schema_analyzer
@@ -217,7 +224,9 @@ class AmbiguityResolverAgent:
                 ambiguities.append(
                     Ambiguity(
                         type=AmbiguityType.COLUMN_REFERENCE,
-                        description=f"The column '{column_name}' exists in multiple tables",
+                        description=(
+                            f"The column '{column_name}' exists in multiple tables"
+                        ),
                         context=f"In query: '{query_text}'",
                         options=options,
                         confidence=0.5,
@@ -298,14 +307,17 @@ class AmbiguityResolverAgent:
                 # Check if the aggregation target is ambiguous
                 if "of" in query_text.lower() or "for" in query_text.lower():
                     # The target might be specified
-                    confidence = 0.7
+                    # confidence = 0.7 # Unused variable
+                    pass  # Confidence is handled below or not needed here
                 else:
                     # No clear target for aggregation
                     confidence = 0.4
                     ambiguities.append(
                         Ambiguity(
                             type=AmbiguityType.AGGREGATION,
-                            description=f"Ambiguous target for {agg_func} aggregation",
+                            description=(
+                                f"Ambiguous target for {agg_func} aggregation"
+                            ),
                             context=f"In query: '{query_text}'",
                             options=self.aggregation_functions,
                             confidence=confidence,
@@ -353,7 +365,9 @@ class AmbiguityResolverAgent:
                     Ambiguity(
                         type=AmbiguityType.TEMPORAL,
                         description="Ambiguous time reference detected",
-                        context=f"Matched pattern: '{pattern}' in query: '{query_text}'",
+                        context=(
+                            f"Matched pattern: '{pattern}' in query: '{query_text}'"
+                        ),
                         options=options,
                         confidence=0.3,
                         impact=0.8,
@@ -401,14 +415,17 @@ class AmbiguityResolverAgent:
                     for dir_term in ["ascending", "descending", "asc", "desc"]
                 ):
                     # Direction is specified
-                    confidence = 0.8
+                    # confidence = 0.8 # Unused variable
+                    pass  # Confidence not needed here
                 else:
                     # No clear direction
                     ambiguities.append(
                         Ambiguity(
                             type=AmbiguityType.ORDER,
                             description="Ambiguous ordering direction",
-                            context=f"Ordering term: '{term}' in query: '{query_text}'",
+                            context=(
+                                f"Ordering term: '{term}' in query: '{query_text}'"
+                            ),
                             options=["ASC (ascending)", "DESC (descending)"],
                             confidence=0.5,
                             impact=0.5,
@@ -431,28 +448,28 @@ class AmbiguityResolverAgent:
                     options = []
                     for table_name in detected_tables:
                         if table_name in schema_info.tables:
-                            for column_name in schema_info.tables[table_name].columns:
-                                if any(
-                                    pattern in column_name.lower()
-                                    for pattern in [
-                                        "date",
-                                        "time",
-                                        "id",
-                                        "name",
-                                        "price",
-                                        "amount",
-                                        "score",
-                                        "rating",
-                                    ]
-                                ):
-                                    options.append(f"{table_name}.{column_name}")
+                            for col_name in schema_info.tables[table_name].columns:
+                                common_patterns = [
+                                    "date",
+                                    "time",
+                                    "id",
+                                    "name",
+                                    "price",
+                                    "amount",
+                                    "score",
+                                    "rating",
+                                ]
+                                if any(p in col_name.lower() for p in common_patterns):
+                                    options.append(f"{table_name}.{col_name}")
 
                     if options:
                         ambiguities.append(
                             Ambiguity(
                                 type=AmbiguityType.ORDER,
                                 description="Ambiguous ordering column",
-                                context=f"Ordering term: '{term}' in query: '{query_text}'",
+                                context=(
+                                    f"Ordering term: '{term}' in query: '{query_text}'"
+                                ),
                                 options=options[:5],  # Limit to 5 suggestions
                                 confidence=0.4,
                                 impact=0.6,
@@ -522,6 +539,7 @@ class AmbiguityResolverAgent:
                 # Choose most common option
                 most_common = max(column_usage.items(), key=lambda x: x[1])
                 ambiguity.resolved_option = most_common[0]
+                # Confidence based on frequency, capped at 0.9
                 ambiguity.confidence = min(0.7 + (most_common[1] / 10), 0.9)
                 return
 
@@ -553,7 +571,8 @@ class AmbiguityResolverAgent:
         """
         # For now, prefer direct joins over complex paths
         for option in ambiguity.options:
-            if "Join path" in option and "1" in option:  # Choose first join path
+            # Simple heuristic: choose the first suggested path
+            if "Join path" in option and "1" in option:
                 ambiguity.resolved_option = option
                 ambiguity.confidence = 0.7
                 return
@@ -682,6 +701,7 @@ class AmbiguityResolverAgent:
         elif "column" in ambiguity.description.lower():
             # Try to infer from query text and options
             for option in ambiguity.options:
+                # Check for date/time related terms
                 if "date" in option.lower() and any(
                     term in query_text.lower()
                     for term in ["recent", "latest", "newest", "oldest"]
@@ -689,6 +709,7 @@ class AmbiguityResolverAgent:
                     ambiguity.resolved_option = option
                     ambiguity.confidence = 0.8
                     return
+                # Check for price/cost related terms
                 elif "price" in option.lower() and any(
                     term in query_text.lower()
                     for term in ["expensive", "cheap", "cost", "price"]
@@ -696,6 +717,7 @@ class AmbiguityResolverAgent:
                     ambiguity.resolved_option = option
                     ambiguity.confidence = 0.8
                     return
+                # Check for name/alphabetical terms
                 elif "name" in option.lower() and any(
                     term in query_text.lower()
                     for term in ["alphabetical", "name", "called"]
@@ -704,14 +726,14 @@ class AmbiguityResolverAgent:
                     ambiguity.confidence = 0.8
                     return
 
-            # No clear match, choose a reasonable default
+            # No clear match, choose a reasonable default (e.g., date column)
             for option in ambiguity.options:
                 if "date" in option.lower():
                     ambiguity.resolved_option = option
                     ambiguity.confidence = 0.7
                     return
 
-            # Fallback
+            # Fallback if no date column found
             if ambiguity.options:
                 ambiguity.resolved_option = ambiguity.options[0]
                 ambiguity.confidence = 0.6
@@ -729,7 +751,7 @@ class AmbiguityResolverAgent:
         Returns:
             List of clarification questions.
         """
-        # Filter ambiguities that need clarification
+        # Filter ambiguities that need clarification (low confidence, high impact)
         need_clarification = [
             a
             for a in ambiguities
@@ -739,7 +761,7 @@ class AmbiguityResolverAgent:
         # Sort by impact (highest first)
         need_clarification.sort(key=lambda a: a.impact, reverse=True)
 
-        # Generate clarification questions
+        # Generate clarification questions up to the max limit
         clarifications = []
         for ambiguity in need_clarification[:max_questions]:
             question = self._generate_question_for_ambiguity(ambiguity)
@@ -747,7 +769,7 @@ class AmbiguityResolverAgent:
                 QueryClarification(
                     question=question,
                     ambiguity=ambiguity,
-                    suggested_options=ambiguity.options[:5],  # Limit to 5 options
+                    suggested_options=ambiguity.options[:5],  # Limit options
                 )
             )
 
@@ -761,29 +783,32 @@ class AmbiguityResolverAgent:
             ambiguity (Ambiguity): Ambiguity to generate question for.
 
         Returns:
-            Human-readable question.
+            Human-readable question string.
         """
         if ambiguity.type == AmbiguityType.COLUMN_REFERENCE:
-            return "I found multiple columns named similarly to what you referenced. Which one did you mean?"
-
+            return (
+                "I found multiple columns named similarly to what you referenced. "
+                "Which one did you mean?"
+            )
         elif ambiguity.type == AmbiguityType.JOIN_PATH:
-            return "There are multiple ways to join the tables you mentioned. Which join path would be most appropriate?"
-
+            return (
+                "There are multiple ways to join the tables you mentioned. "
+                "Which join path would be most appropriate?"
+            )
         elif ambiguity.type == AmbiguityType.AGGREGATION:
             return "How would you like to aggregate the data? (e.g., COUNT, SUM, AVG)"
-
         elif ambiguity.type == AmbiguityType.TEMPORAL:
             return "What time period are you interested in?"
-
         elif ambiguity.type == AmbiguityType.ORDER:
             if "direction" in ambiguity.description.lower():
                 return (
-                    "How would you like the results ordered? (ascending or descending)"
+                    "How would you like the results ordered? "
+                    "(ascending or descending)"
                 )
             else:
                 return "Which field would you like to order the results by?"
-
         else:
+            # Generic fallback question
             return f"Could you clarify the following: {ambiguity.description}?"
 
     def update_from_clarification(
@@ -793,22 +818,23 @@ class AmbiguityResolverAgent:
         Update ambiguity resolution based on user clarification.
 
         Args:
-            clarification (QueryClarification): QueryClarification containing the ambiguity.
-            response (str): User's response to clarification.
+            clarification (QueryClarification): The clarification object.
+            response (str): User's response to the clarification question.
         """
         clarification.clarification_response = response
         ambiguity = clarification.ambiguity
 
-        # Check if response matches any of the suggested options
+        # Check if response matches any of the suggested options (case-insensitive)
         for option in ambiguity.options:
             if option.lower() in response.lower():
                 ambiguity.resolved_option = option
-                ambiguity.confidence = 1.0
+                ambiguity.confidence = 1.0  # High confidence after direct match
                 return
 
-        # No direct match, try to interpret the response
-        ambiguity.resolved_option = response  # Use response directly
-        ambiguity.confidence = 0.8  # Assume fairly high confidence since user responded
+        # No direct match, use the response directly as the resolved option
+        # Confidence is lower as interpretation might be needed later
+        ambiguity.resolved_option = response
+        ambiguity.confidence = 0.8
 
     def apply_resolved_ambiguities(
         self, sql_template: str, ambiguities: List[Ambiguity]
@@ -817,104 +843,79 @@ class AmbiguityResolverAgent:
         Apply resolved ambiguities to a SQL template.
 
         Args:
-            sql_template (str): SQL template with placeholders.
+            sql_template (str): SQL template with placeholders like {{TYPE:desc}}.
             ambiguities (List[Ambiguity]): List of resolved ambiguities.
 
         Returns:
-            Updated SQL with ambiguities resolved.
+            Updated SQL string with placeholders replaced by resolved options.
         """
         updated_sql = sql_template
 
-        # Replace placeholders based on ambiguity type
+        # Replace placeholders based on ambiguity type and resolved option
         for ambiguity in ambiguities:
             if ambiguity.resolved_option is None:
-                continue
+                continue  # Skip unresolved ambiguities
 
-            if ambiguity.type == AmbiguityType.COLUMN_REFERENCE:
-                # Example placeholder: {{COLUMN:column_name}}
-                placeholder = f"{{{{COLUMN:{ambiguity.description}}}}}"
-                updated_sql = updated_sql.replace(
-                    placeholder, ambiguity.resolved_option
-                )
+            # Construct placeholder based on type and description
+            # Example: {{COLUMN_REFERENCE:The column 'id' exists...}}
+            placeholder = (
+                f"{{{{{ambiguity.type.value.upper()}:{ambiguity.description}}}}}"
+            )
 
-            elif ambiguity.type == AmbiguityType.JOIN_PATH:
-                # Example placeholder: {{JOIN_PATH:tables}}
-                placeholder = f"{{{{JOIN_PATH:{ambiguity.description}}}}}"
-                # Extract the actual join condition from the option
-                join_condition = ambiguity.resolved_option.split(": ", 1)[1]
-                updated_sql = updated_sql.replace(placeholder, join_condition)
+            resolved_value = ambiguity.resolved_option
 
-            elif ambiguity.type == AmbiguityType.AGGREGATION:
-                # Example placeholder: {{AGGREGATION:target}}
-                placeholder = f"{{{{AGGREGATION:{ambiguity.description}}}}}"
-                updated_sql = updated_sql.replace(
-                    placeholder, ambiguity.resolved_option
-                )
-
+            # Specific handling for certain types if needed
+            if ambiguity.type == AmbiguityType.JOIN_PATH:
+                # Extract the actual join condition if formatted like "Path: Condition"
+                if ": " in resolved_value:
+                    resolved_value = resolved_value.split(": ", 1)[1]
             elif ambiguity.type == AmbiguityType.TEMPORAL:
-                # Example placeholder: {{TEMPORAL:reference}}
-                placeholder = f"{{{{TEMPORAL:{ambiguity.description}}}}}"
-                # Convert friendly terms to SQL
-                sql_date = self._convert_temporal_to_sql(ambiguity.resolved_option)
-                updated_sql = updated_sql.replace(placeholder, sql_date)
-
+                # Convert friendly terms (e.g., "Last 7 days") to SQL
+                resolved_value = self._convert_temporal_to_sql(resolved_value)
             elif ambiguity.type == AmbiguityType.ORDER:
                 if "direction" in ambiguity.description.lower():
-                    # Example placeholder: {{ORDER_DIRECTION:column}}
-                    placeholder = f"{{{{ORDER_DIRECTION:{ambiguity.description}}}}}"
-                    # Extract the direction (ASC/DESC)
-                    direction = "ASC" if "ASC" in ambiguity.resolved_option else "DESC"
-                    updated_sql = updated_sql.replace(placeholder, direction)
-                else:
-                    # Example placeholder: {{ORDER_COLUMN:description}}
-                    placeholder = f"{{{{ORDER_COLUMN:{ambiguity.description}}}}}"
-                    updated_sql = updated_sql.replace(
-                        placeholder, ambiguity.resolved_option
-                    )
+                    # Extract only ASC or DESC
+                    direction = "ASC" if "ASC" in resolved_value else "DESC"
+                    resolved_value = direction
+
+            # Replace the placeholder in the SQL template
+            updated_sql = updated_sql.replace(placeholder, resolved_value)
 
         return updated_sql
 
     def _convert_temporal_to_sql(self, temporal_option: str) -> str:
         """
-        Convert a temporal option to a SQL expression.
+        Convert a temporal option string to a SQL expression.
 
         Args:
             temporal_option (str): Temporal option (e.g., 'Last 7 days').
 
         Returns:
-            SQL expression for the temporal option.
+            SQL expression string for the temporal option.
         """
+        option_lower = temporal_option.lower()
         # Check if it's in our predefined formats
-        if temporal_option.lower() in self.time_formats:
-            return self.time_formats[temporal_option.lower()]
+        if option_lower in self.time_formats:
+            return self.time_formats[option_lower]
 
-        # Handle other common formats
-        if "last" in temporal_option.lower():
-            if "7 days" in temporal_option.lower() or "week" in temporal_option.lower():
-                return "CURRENT_DATE - INTERVAL '7 days'"
-            elif (
-                "30 days" in temporal_option.lower()
-                or "month" in temporal_option.lower()
-            ):
-                return "CURRENT_DATE - INTERVAL '30 days'"
-            elif (
-                "90 days" in temporal_option.lower()
-                or "3 months" in temporal_option.lower()
-            ):
-                return "CURRENT_DATE - INTERVAL '90 days'"
-            elif (
-                "365 days" in temporal_option.lower()
-                or "year" in temporal_option.lower()
-            ):
-                return "CURRENT_DATE - INTERVAL '365 days'"
-        elif "current" in temporal_option.lower():
-            if "month" in temporal_option.lower():
-                return "DATE_TRUNC('month', CURRENT_DATE)"
-            elif "year" in temporal_option.lower():
-                return "DATE_TRUNC('year', CURRENT_DATE)"
+        # Handle other common formats like "last X days/months/years"
+        match = re.match(r"last (\d+) (days|weeks|months|years)", option_lower)
+        if match:
+            num = int(match.group(1))
+            unit = match.group(2)
+            # Ensure unit is singular for INTERVAL
+            unit = unit.rstrip("s")
+            return f"CURRENT_DATE - INTERVAL '{num} {unit}'"
 
-        # Default to current date
-        return "CURRENT_DATE"
+        # Handle "current month/year"
+        if "current month" in option_lower or "this month" in option_lower:
+            return "DATE_TRUNC('month', CURRENT_DATE)"
+        if "current year" in option_lower or "this year" in option_lower:
+            return "DATE_TRUNC('year', CURRENT_DATE)"
+
+        # Default fallback if no specific format matches
+        logger.warning(f"Could not convert temporal option '{temporal_option}' to SQL.")
+        return f"'{temporal_option}'"  # Return as string literal as fallback
 
 
 if __name__ == "__main__":
@@ -932,7 +933,8 @@ if __name__ == "__main__":
     print(f"Identified {len(ambiguities)} ambiguities:")
     for a in ambiguities:
         print(
-            f"- {a.type.value}: {a.description} (confidence: {a.confidence}, impact: {a.impact})"
+            f"- {a.type.value}: {a.description} "
+            f"(confidence: {a.confidence:.2f}, impact: {a.impact:.2f})"
         )
         if a.options:
             print(f"  Options: {', '.join(a.options[:3])}...")
@@ -945,7 +947,10 @@ if __name__ == "__main__":
     print("\nResolved ambiguities:")
     for a in resolved:
         if a.resolved_option:
-            print(f"- {a.type.value}: {a.resolved_option} (confidence: {a.confidence})")
+            print(
+                f"- {a.type.value}: {a.resolved_option} "
+                f"(confidence: {a.confidence:.2f})"
+            )
 
     # Generate clarification questions for low-confidence resolutions
     clarifications = resolver.generate_clarification_questions(resolved)
@@ -957,3 +962,25 @@ if __name__ == "__main__":
             print(f"- {c.question}")
             if c.suggested_options:
                 print(f"  Suggested options: {', '.join(c.suggested_options)}")
+# </final_file_content>
+
+# IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.<environment_details>
+# # VSCode Visible Files
+# agents/ambiguity_resolver.py
+
+# # VSCode Open Tabs
+# main.py
+# core/adaptive_context_manager.py
+# core/execution_aware_trainer.py
+# agents/schema_analyzer_agent.py
+# agents/ambiguity_resolver.py
+
+# # Current Time
+# 4/26/2025, 6:58:43 PM (America/Chicago, UTC-5:00)
+
+# # Context Window Usage
+# 398,722 / 1,048.576K tokens used (38%)
+
+# # Current Mode
+# ACT MODE
+# </environment_details>
