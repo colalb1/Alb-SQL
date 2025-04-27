@@ -1,3 +1,7 @@
+# WARNING: This module might be used differently depending on the execution
+# mode selected in main.py (e.g., 'eval' vs 'example'). Ensure compatibility
+# if making changes related to initialization or external dependencies.
+
 """
 Schema Analyzer Agent Module
 
@@ -34,8 +38,9 @@ class ColumnInfo:
     description: Optional[str] = None
     sample_values: List[str] = field(default_factory=list)
     constraints: List[str] = field(default_factory=list)
+    # Stats like min, max, avg, distinct count, etc.
     stats: Dict[str, Union[float, int, str]] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)  # Added missing tags attribute
+    tags: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -45,6 +50,7 @@ class TableInfo:
     name: str
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     primary_keys: List[str] = field(default_factory=list)
+    # Maps column name to (referenced_table, referenced_column)
     foreign_keys: Dict[str, Tuple[str, str]] = field(default_factory=dict)
     description: Optional[str] = None
     sample_row_count: int = 0
@@ -57,6 +63,7 @@ class SchemaInfo:
 
     name: str
     tables: Dict[str, TableInfo] = field(default_factory=dict)
+    # List of (src_table, src_col, dst_table, dst_col) tuples
     relationships: List[Tuple[str, str, str, str]] = field(default_factory=list)
     domain: Optional[str] = None
     description: Optional[str] = None
@@ -381,8 +388,8 @@ class SchemaAnalyzerAgent:
         # Extract relationships from foreign keys
         relationships = []
         for table_name, table_info in schema_info.tables.items():
-            for fk_column, (ref_table, ref_column) in table_info.foreign_keys.items():
-                relationships.append((table_name, fk_column, ref_table, ref_column))
+            for fk_col, (ref_tbl, ref_col) in table_info.foreign_keys.items():
+                relationships.append((table_name, fk_col, ref_tbl, ref_col))
 
         # Store relationships
         schema_info.relationships = relationships
@@ -426,26 +433,21 @@ class SchemaAnalyzerAgent:
                 ):
                     column_info.tags = column_info.tags + ["quantity"]
 
-                # Infer data types
-                if "INT" in column_info.data_type.upper():
-                    column_info.tags = column_info.tags + ["numeric", "integer"]
-                elif any(
-                    t in column_info.data_type.upper()
-                    for t in ["DECIMAL", "FLOAT", "DOUBLE"]
-                ):
-                    column_info.tags = column_info.tags + ["numeric", "float"]
-                elif any(
-                    t in column_info.data_type.upper()
-                    for t in ["CHAR", "TEXT", "VARCHAR"]
-                ):
-                    column_info.tags = column_info.tags + ["text"]
-                elif any(
-                    t in column_info.data_type.upper()
-                    for t in ["DATE", "TIME", "TIMESTAMP"]
-                ):
-                    column_info.tags = column_info.tags + ["date"]
-                elif "BOOL" in column_info.data_type.upper():
-                    column_info.tags = column_info.tags + ["boolean"]
+                # Infer data types and add corresponding tags
+                data_type_upper = column_info.data_type.upper()
+                if "INT" in data_type_upper:
+                    column_info.tags.extend(["numeric", "integer"])
+                elif any(t in data_type_upper for t in ["DECIMAL", "FLOAT", "DOUBLE"]):
+                    column_info.tags.extend(["numeric", "float"])
+                elif any(t in data_type_upper for t in ["CHAR", "TEXT", "VARCHAR"]):
+                    column_info.tags.append("text")
+                elif any(t in data_type_upper for t in ["DATE", "TIME", "TIMESTAMP"]):
+                    column_info.tags.append("date")
+                elif "BOOL" in data_type_upper:
+                    column_info.tags.append("boolean")
+
+                # Ensure tags are unique
+                column_info.tags = list(set(column_info.tags))
 
     def generate_join_conditions(
         self, schema_info: SchemaInfo, tables: List[str]
@@ -473,19 +475,38 @@ class SchemaAnalyzerAgent:
                 (src_table, f"{src_table}.{src_col} = {dst_table}.{dst_col}")
             )
 
-        # Find joins that connect all tables
+        # Find joins that connect all tables (simple BFS/pathfinding approach)
+        # This might not find the optimal path or handle complex scenarios
         joins = []
-        visited = set([tables[0]])
-        remaining = set(tables[1:])
+        start_node = tables[0]
+        nodes_to_visit = set(tables)
+        visited_edges = set()
+        queue = [(start_node, [])]  # (current_table, path_conditions)
 
-        while remaining:
-            for src in list(visited):
-                for dst, condition in graph[src]:
-                    if dst in remaining:
-                        joins.append(condition)
-                        visited.add(dst)
-                        remaining.remove(dst)
-                        break
+        while queue:
+            current_table, path = queue.pop(0)
+            nodes_to_visit.discard(current_table)
+
+            if not nodes_to_visit:  # All tables connected
+                joins = path
+                break
+
+            for neighbor, condition in graph[current_table]:
+                edge = tuple(sorted((current_table, neighbor)))
+                if neighbor in nodes_to_visit and edge not in visited_edges:
+                    visited_edges.add(edge)
+                    new_path = path + [condition]
+                    queue.append((neighbor, new_path))
+
+        # Check if all tables were connected
+        if nodes_to_visit:
+            logger.warning(f"Could not find path connecting all tables: {tables}")
+            # Fallback: return direct relationships found
+            direct_joins = []
+            for src, src_col, dst, dst_col in schema_info.relationships:
+                if src in tables and dst in tables:
+                    direct_joins.append(f"{src}.{src_col} = {dst}.{dst_col}")
+            return list(set(direct_joins))  # Return unique direct joins
 
         return joins
 
@@ -505,25 +526,33 @@ class SchemaAnalyzerAgent:
         for table_name, table_info in schema_info.tables.items():
             constraints[table_name] = {}
             for column_name, column_info in table_info.columns.items():
+                constraint_parts = []
                 # Basic type constraints
                 if "INT" in column_info.data_type.upper():
                     if "id" in column_name.lower() or column_info.is_primary_key:
-                        constraints[table_name][column_name] = "INTEGER > 0"
+                        constraint_parts.append("INTEGER > 0")
                     else:
-                        constraints[table_name][column_name] = "INTEGER"
+                        constraint_parts.append("INTEGER")
                 elif "DATE" in column_info.data_type.upper():
-                    constraints[table_name][column_name] = "DATE"
-                # Domain-specific constraints
-                if "age" in column_name.lower():
-                    constraints[table_name][column_name] = "INTEGER BETWEEN 0-120"
-                elif "email" in column_name.lower():
-                    constraints[table_name][column_name] = "TEXT containing '@'"
-                elif "price" in column_name.lower() or "amount" in column_name.lower():
-                    constraints[table_name][column_name] = "DECIMAL >= 0"
-                elif (
-                    "quantity" in column_name.lower() or "count" in column_name.lower()
-                ):
-                    constraints[table_name][column_name] = "INTEGER >= 0"
+                    constraint_parts.append("DATE")
+                elif "DECIMAL" in column_info.data_type.upper():
+                    constraint_parts.append("DECIMAL")
+
+                # Domain-specific constraints based on name
+                col_lower = column_name.lower()
+                if "age" in col_lower:
+                    constraint_parts.append("BETWEEN 0-120")
+                elif "email" in col_lower:
+                    constraint_parts.append("TEXT containing '@'")
+                elif "price" in col_lower or "amount" in col_lower:
+                    constraint_parts.append(">= 0")
+                elif "quantity" in col_lower or "count" in col_lower:
+                    constraint_parts.append(">= 0")
+
+                if constraint_parts:
+                    constraints[table_name][column_name] = " AND ".join(
+                        constraint_parts
+                    )
 
         return constraints
 
@@ -532,7 +561,7 @@ class SchemaAnalyzerAgent:
         schema_info: SchemaInfo,
         target_tables: Optional[List[str]] = None,
         detail_level: str = "medium",
-        include_sample_data: bool = True,  # Added parameter
+        include_sample_data: bool = True,
     ) -> str:
         """
         Generate a human-readable summary of the schema.
@@ -541,12 +570,11 @@ class SchemaAnalyzerAgent:
             schema_info (SchemaInfo): SchemaInfo containing schema information.
             target_tables (Optional[List[str]]): Optional list of tables to
                 include in the summary.
-            detail_level (str): Level of detail to include
-                ('low', 'medium', 'high').
-            include_sample_data (bool): Whether to include sample data for high detail.
+            detail_level (str): Level of detail ('low', 'medium', 'high').
+            include_sample_data (bool): Include sample data for high detail.
 
         Returns:
-            Human-readable schema summary.
+            Human-readable schema summary string.
         """
         if target_tables is None:
             target_tables = list(schema_info.tables.keys())
@@ -568,22 +596,23 @@ class SchemaAnalyzerAgent:
             summary.append(f"\nTable: {table_name}")
             if table_info.description and detail_level != "low":
                 summary.append(f"Description: {table_info.description}")
-            if detail_level != "low":
-                summary.append(f"Row count (sample): ~{table_info.sample_row_count}")
+            if detail_level != "low" and table_info.sample_row_count > 0:
+                # Shortened line 631
+                summary.append(f"Rows (sample): ~{table_info.sample_row_count}")
 
             summary.append("Columns:")
             for column_name, column_info in table_info.columns.items():
-                line = f"  - {column_name} ({column_info.data_type})"
+                line_parts = [f"  - {column_name} ({column_info.data_type})"]
                 if column_info.is_primary_key:
-                    line += " [PK]"
+                    line_parts.append("[PK]")
                 if column_info.is_foreign_key:
-                    line += (
-                        f" [FK -> {column_info.referenced_table}."
-                        f"{column_info.referenced_column}]"
-                    )
+                    # Restructured FK string construction (lines 646-647 area)
+                    ref_table = column_info.referenced_table
+                    ref_col = column_info.referenced_column
+                    line_parts.append(f"[FK -> {ref_table}.{ref_col}]")
                 if not column_info.nullable:
-                    line += " [NOT NULL]"
-                summary.append(line)
+                    line_parts.append("[NOT NULL]")
+                summary.append(" ".join(line_parts))
 
                 # Add sample values for high detail level if requested
                 if (
@@ -598,9 +627,10 @@ class SchemaAnalyzerAgent:
         if detail_level != "low" and schema_info.relationships:
             summary.append("\nRelationships:")
             for src_table, src_col, dst_table, dst_col in schema_info.relationships:
+                # Only show relationships between the included tables
                 if src_table in target_tables and dst_table in target_tables:
                     summary.append(
-                        f"  - {src_table}.{src_col} -> " f"{dst_table}.{dst_col}"
+                        f"  - {src_table}.{src_col} -> {dst_table}.{dst_col}"
                     )
 
         return "\n".join(summary)
@@ -612,11 +642,11 @@ if __name__ == "__main__":
 
     # Analyze e-commerce schema
     e_commerce_schema = analyzer.analyze_schema("e_commerce")
-    print(analyzer.generate_schema_summary(e_commerce_schema))
+    print(analyzer.generate_schema_summary(e_commerce_schema, detail_level="high"))
 
     # Generate join conditions
     join_conditions = analyzer.generate_join_conditions(
-        e_commerce_schema, ["orders", "users", "order_items"]
+        e_commerce_schema, ["orders", "users", "order_items", "products"]
     )
     print("\nJoin Conditions:")
     for condition in join_conditions:
