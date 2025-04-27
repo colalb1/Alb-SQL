@@ -1,9 +1,15 @@
+# WARNING: This module might be used differently depending on the execution
+# mode selected in main.py (e.g., 'eval' vs 'example'). Ensure compatibility
+# if making changes related to initialization or external dependencies like
+# db_connector.
+
 """
 Execution-Aware Trainer Module
 
-This module implements execution-aware training and validation for SQL generation,
-ensuring that the generated SQL queries are not only syntactically correct but also
-produce the expected results when executed against the database.
+This module implements execution-aware training and validation for SQL
+generation, ensuring that the generated SQL queries are not only
+syntactically correct but also produce the expected results when executed
+against the database.
 """
 
 import logging
@@ -13,7 +19,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -65,16 +72,18 @@ class ExecutionAwareTrainer:
 
         Args:
             db_connector: Connector to execute SQL against databases.
-            execution_timeout (int): Maximum time (in seconds) to wait for query execution.
-            max_rows_to_compare (int): Maximum number of rows to compare when evaluating results.
-            plan_weight (float): Weight of the execution plan similarity in the loss function.
-            result_weight (float): Weight of the result similarity in the loss function.
+            execution_timeout (int): Max time (seconds) for query execution.
+            max_rows_to_compare (int): Max rows to compare for results.
+            plan_weight (float): Weight of execution plan similarity in loss.
+            result_weight (float): Weight of result similarity in loss.
         """
         self.db_connector = db_connector
         self.execution_timeout = execution_timeout
         self.max_rows_to_compare = max_rows_to_compare
         self.plan_weight = plan_weight
         self.result_weight = result_weight
+        # Using Dict for query history, mapping db_name to list of
+        # (query, result) tuples.
         self.query_history: Dict[str, List[Tuple[str, QueryExecutionResult]]] = {}
 
     def execute_query(
@@ -92,23 +101,21 @@ class ExecutionAwareTrainer:
             QueryExecutionResult containing execution results.
         """
         if self.db_connector is None:
-            logger.warning("No database connector provided. Cannot execute query.")
+            logger.warning("No db_connector provided. Cannot execute query.")
             return QueryExecutionResult(
                 success=False, error_message="No database connector"
             )
 
         start_time = time.time()
         try:
-            # This would use the actual database connector
-            # For now, we'll simulate execution results
+            # This would use the actual database connector.
+            # For now, we simulate execution results.
             success = True
-            rows = [{"id": 1, "name": "Sample"} for _ in range(10)]
+            rows = [{"id": i, "name": f"Sample_{i}"} for i in range(1, 11)]
             row_count = len(rows)
-            execution_plan = (
-                {"plan_type": "sequential_scan", "cost": 100}
-                if get_execution_plan
-                else None
-            )
+            execution_plan = None
+            if get_execution_plan:
+                execution_plan = {"plan_type": "sequential_scan", "cost": 100}
             error_message = None
         except Exception as e:
             success = False
@@ -129,9 +136,7 @@ class ExecutionAwareTrainer:
         )
 
         # Save query and result to history
-        if db_name not in self.query_history:
-            self.query_history[db_name] = []
-        self.query_history[db_name].append((query, result))
+        self.query_history.setdefault(db_name, []).append((query, result))
 
         return result
 
@@ -147,12 +152,12 @@ class ExecutionAwareTrainer:
             Execution plan or None if not available.
         """
         if self.db_connector is None:
-            logger.warning("No database connector provided. Cannot get execution plan.")
+            logger.warning("No db_connector provided. Cannot get execution plan.")
             return None
 
         try:
-            # This would use the actual database connector to get the execution plan
-            # For now, we'll simulate an execution plan
+            # This would use the actual database connector to get the plan.
+            # For now, we'll simulate an execution plan.
             execution_plan = {
                 "plan_type": "sequential_scan",
                 "cost": 100,
@@ -170,8 +175,8 @@ class ExecutionAwareTrainer:
         Compare two query result sets and return a similarity score.
 
         Args:
-            result1 (List[Dict[str, Any]]): First result set (list of row dictionaries).
-            result2 (List[Dict[str, Any]]): Second result set (list of row dictionaries).
+            result1 (List[Dict[str, Any]]): First result set (list of rows).
+            result2 (List[Dict[str, Any]]): Second result set (list of rows).
 
         Returns:
             Similarity score between 0 (completely different) and 1 (identical).
@@ -190,10 +195,12 @@ class ExecutionAwareTrainer:
         result1 = result1[: self.max_rows_to_compare]
         result2 = result2[: self.max_rows_to_compare]
 
-        # Check if all rows match exactly (order-sensitive)
-        # In a real implementation, we might want to sort and compare or use a more sophisticated comparison
+        # Check if all rows match exactly (order-sensitive).
+        # TODO: Consider order-insensitive comparison (e.g., sets of tuples).
         matching_rows = 0
-        for i in range(min(len(result1), len(result2))):
+        num_rows_to_check = min(len(result1), len(result2))
+        for i in range(num_rows_to_check):
+            # Simple dictionary comparison
             if result1[i] == result2[i]:
                 matching_rows += 1
 
@@ -229,9 +236,8 @@ class ExecutionAwareTrainer:
                 max_cost = max(cost1, cost2)
                 cost_similarity = min_cost / max_cost
 
-            return 0.7 + (
-                0.3 * cost_similarity
-            )  # 70% for matching plan type, 30% for cost
+            # 70% for matching plan type, 30% for cost similarity
+            return 0.7 + (0.3 * cost_similarity)
         else:
             return 0.0  # Different plan types
 
@@ -271,8 +277,8 @@ class ExecutionAwareTrainer:
             self.result_weight * result_similarity + self.plan_weight * plan_similarity
         )
 
-        # Convert similarity to loss (higher similarity = lower loss)
-        loss = 1.0 - similarity
+        # Convert similarity to loss (higher similarity -> lower loss)
+        loss = max(0.0, 1.0 - similarity)
 
         return loss
 
@@ -306,32 +312,34 @@ class ExecutionAwareTrainer:
             else 0.0
         )
 
-        # Semantic correctness - this is a simplified version
-        # In practice, we'd check for correct table usage, joins, and conditions
+        # Semantic correctness - simplified: assumes result match implies semantics
+        # TODO: Implement more robust semantic checks (e.g., AST comparison).
         semantic_correctness = result_match_score
 
-        # Execution efficiency
+        # Execution efficiency score (0-1, higher is better)
         execution_efficiency = 0.0
-        if execution_success and reference_result.execution_time > 0:
-            # Lower ratio is better (generated query executes faster)
-            time_ratio = (
-                generated_result.execution_time / reference_result.execution_time
-            )
+        if (
+            execution_success
+            and reference_result.success
+            and reference_result.execution_time > 0
+        ):
+            gen_time = generated_result.execution_time
+            ref_time = reference_result.execution_time
+            # Normalize score: 1 if gen_time <= ref_time, decreases otherwise.
+            # Example: gen_time = 2*ref_time => ratio = 1 => score = 0.5
+            # Example: gen_time = 0.5*ref_time => ratio = -0.5 => score = 1.0
+            time_ratio = max(0.0, (gen_time - ref_time) / ref_time)
+            execution_efficiency = 1.0 / (1.0 + time_ratio)
 
-            # Convert to a 0-1 score where 1 is better
-            # time_ratio of 0.5 (twice as fast) would give 1.0
-            # time_ratio of 1.0 (same speed) would give 0.5
-            # time_ratio of 2.0 (twice as slow) would give 0.25
-            execution_efficiency = min(1.0, 1.0 / (1.0 + time_ratio))
-
-        # Overall score - weighted average of all metrics
+        # Overall score - weighted average
         overall_score = 0.0
         if execution_success:
+            # Define weights for different metrics
             weights = {
-                "syntax": 0.1,
-                "semantic": 0.4,
-                "result_match": 0.4,
-                "efficiency": 0.1,
+                "syntax": 0.1,  # Basic check
+                "semantic": 0.4,  # Currently tied to result match
+                "result_match": 0.4,  # Core correctness metric
+                "efficiency": 0.1,  # Performance aspect
             }
             overall_score = (
                 weights["syntax"] * syntax_correctness
@@ -364,39 +372,41 @@ class ExecutionAwareTrainer:
             db_name (str): Database name.
             target_tables (List[str]): List of tables relevant to the query.
             question (str): Natural language question to translate to SQL.
-            include_sample_data (bool): Whether to include sample data in the prompt.
-            complexity_estimate (str): Estimated complexity of the query.
+            include_sample_data (bool): Whether to include sample data in prompt.
+            complexity_estimate (str): Estimated query complexity ('simple', etc.).
 
         Returns:
-            Formatted prompt for LLM.
+            Formatted prompt string for an LLM.
         """
-        # This would access actual schema information
-        # For now, we'll use a template with placeholders
+        # This method seems less related to the trainer's core execution-aware
+        # logic and more to prompt generation, potentially belonging elsewhere
+        # or using components like AdaptiveContextManager.
+        # Keeping the placeholder implementation for now.
 
-        # Build adaptive schema summary based on complexity
+        # Determine detail level based on complexity estimate
         if complexity_estimate == "simple":
-            token_allocation = "brief"
-            tables_to_include = target_tables[:2]  # Limit tables for simple queries
+            detail_level = "brief"
+            tables_to_include = target_tables[:2]  # Limit tables
         elif complexity_estimate == "medium":
-            token_allocation = "moderate"
+            detail_level = "moderate"
             tables_to_include = target_tables
         else:  # complex
-            token_allocation = "detailed"
-            tables_to_include = target_tables + self._get_related_tables(
-                db_name, target_tables
-            )
+            detail_level = "detailed"
+            # Include related tables for complex queries
+            related_tables = self._get_related_tables(db_name, target_tables)
+            tables_to_include = list(set(target_tables + related_tables))
 
+        # Generate schema summary using the determined parameters
         schema_summary = self._generate_schema_summary(
-            db_name, tables_to_include, token_allocation, include_sample_data
+            db_name, tables_to_include, detail_level, include_sample_data
         )
 
-        # Get common mistakes for these tables/DB
+        # Get common mistakes relevant to the included tables/DB
         common_mistakes = self._get_common_mistakes(db_name, tables_to_include)
 
-        # Generate prompt
-        prompt = f"""
-**Role**: World-class SQL Engineer + Database Architect
-**Task**: Solve {db_name} problem using {db_name}'s schema
+        # Construct the prompt string
+        prompt = f"""**Role**: World-class SQL Engineer + Database Architect
+**Task**: Solve the following problem for the '{db_name}' database.
 
 **Question**:
 {question}
@@ -404,18 +414,18 @@ class ExecutionAwareTrainer:
 **Schema Context**:
 {schema_summary}
 
-**Common Mistakes**:
+**Common Mistakes to Avoid**:
 {common_mistakes}
 
-**Reasoning Chain**:
-[Tables] → [Filters] → [Aggregation]
+**General Reasoning Steps**:
+1. Identify relevant tables.
+2. Determine JOIN conditions if multiple tables are needed.
+3. Apply WHERE clause filters based on the question.
+4. SELECT the required columns.
+5. Apply aggregation (COUNT, SUM, AVG, etc.) and GROUP BY if needed.
+6. Apply ORDER BY and LIMIT if needed.
 
-**Response Format**:
-```sql
-/* Explanatory comments */
-SELECT ...
-```
-"""
+**Response Format**: Provide only the SQL query, enclosed in ```sql ... ```."""
         return prompt
 
     def _generate_schema_summary(
@@ -431,47 +441,40 @@ SELECT ...
         Args:
             db_name (str): Database name.
             tables (List[str]): List of tables to include.
-            detail_level (str): Level of detail to include ('brief', 'moderate', 'detailed').
-            include_sample_data (bool): Whether to include sample data.
+            detail_level (str): Detail level ('brief', 'moderate', 'detailed').
+            include_sample_data (bool): Whether to include sample data rows.
 
         Returns:
-            Schema summary string.
+            A string summarizing the schema for the specified tables.
         """
-        # This would access actual schema information
-        # For now, we'll use a template
-
-        summary = "Tables:\n"
+        # This is a placeholder. Ideally, use SchemaAnalyzerAgent.
+        logger.debug(
+            f"Generating mock schema summary for {tables} (detail: {detail_level})"
+        )
+        summary = f"Schema Summary ({detail_level}):\n"
 
         for table in tables:
             summary += f"- {table}\n"
 
             # Add column details based on detail level
             if detail_level == "brief":
-                summary += "  Columns: id, name, ...\n"
-            else:
-                # For moderate and detailed, include more column info
-                summary += "  Columns:\n"
-                summary += "    id (INTEGER, PK)\n"
-                summary += "    name (VARCHAR)\n"
-                summary += "    created_at (TIMESTAMP)\n"
-
+                summary += f"  - {table}(id, name, ...)\n"  # Minimal columns
+            else:  # moderate or detailed
+                # Placeholder columns - replace with actual schema lookup
+                cols = ["id (INT, PK)", "name (TEXT)", f"{table}_related_id (INT, FK)"]
+                summary += f"  - {table}({', '.join(cols)})\n"
                 if detail_level == "detailed":
-                    # For detailed, include constraints and relationships
-                    summary += "  Constraints:\n"
-                    summary += "    - PK on id\n"
-                    summary += f"    - FK from other_table.{table}_id to {table}.id\n"
+                    summary += f"    Constraints: PK(id), FK({table}_related_id)\n"
 
-            # Include sample data if requested
+            # Include sample data if requested and detail allows
             if include_sample_data and detail_level != "brief":
-                summary += "  Sample Data:\n"
-                summary += "    (1, 'Example', '2023-01-01')\n"
-                summary += "    (2, 'Sample', '2023-01-02')\n"
+                summary += "    Sample: (1, 'Sample Name', 101)\n"
 
+        # Add relationships if detailed
         if detail_level == "detailed":
-            # Add relationship graph for detailed view
+            # Placeholder relationships - replace with actual schema lookup
             summary += "\nRelationships:\n"
-            summary += "users -< posts (users.id = posts.user_id)\n"
-            summary += "posts -< comments (posts.id = comments.post_id)\n"
+            summary += "  table1.id = table2.table1_id\n"
 
         return summary
 
@@ -481,23 +484,21 @@ SELECT ...
 
         Args:
             db_name (str): Database name.
-            tables (List[str]): List of tables.
+            tables (List[str]): List of relevant tables.
 
         Returns:
-            String describing common mistakes.
+            A string listing common mistakes related to the tables/DB.
         """
-        # This would query a knowledge base of common mistakes
-        # For now, we'll use a template
+        # Placeholder - replace with actual knowledge base lookup.
+        mistakes = [
+            "- Ensure correct JOIN conditions.",
+            "- Use IS NULL/IS NOT NULL for NULL checks.",
+            "- Include non-aggregated columns in GROUP BY.",
+        ]
+        if "orders" in tables and "users" in tables:
+            mistakes.append("- Check join direction between users and orders.")
 
-        mistakes = "1. Remember to use appropriate JOIN conditions\n"
-        mistakes += "2. Be careful with NULL handling in WHERE clauses\n"
-
-        # Add specific mistakes for given tables
-        for table in tables:
-            mistakes += f"3. For {table} table, check for valid date formats\n"
-            break  # Just add one example
-
-        return mistakes
+        return "\n".join(mistakes)
 
     def _get_related_tables(self, db_name: str, tables: List[str]) -> List[str]:
         """
@@ -508,18 +509,20 @@ SELECT ...
             tables (List[str]): List of primary tables.
 
         Returns:
-            List of related tables.
+            A list of table names related to the primary tables via FKs.
         """
-        # This would query the actual database schema
-        # For now, we'll return some placeholder related tables
-
-        related = []
+        # Placeholder - replace with actual schema introspection.
+        related_map = {
+            "users": ["orders", "profiles"],
+            "orders": ["order_items", "users"],
+            "products": ["order_items"],
+            "posts": ["comments", "users"],
+        }
+        related = set()
         for table in tables:
-            if table == "users":
-                related.append("profiles")
-            elif table == "posts":
-                related.append("comments")
-                related.append("categories")
+            related.update(related_map.get(table, []))
+        # Return only tables not already in the primary list
+        return list(related - set(tables))
 
         return related
 
@@ -528,22 +531,44 @@ if __name__ == "__main__":
     # Example usage
     trainer = ExecutionAwareTrainer()
 
-    # Example SQL queries
+    logging.basicConfig(level=logging.INFO)
+    logger.info("Running ExecutionAwareTrainer example...")
+
+    # Mock DB Connector (replace with actual connector if needed)
+    class MockDbConnector:
+        def execute(self, db_name, query):
+            logger.info(f"Mock executing on {db_name}: {query[:50]}...")
+            if "FROM user " in query:  # Simulate error
+                raise Exception("Table 'user' not found")
+            # Simulate successful execution
+            return [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+
+        def get_plan(self, db_name, query):
+            logger.info(f"Mock getting plan for: {query[:50]}...")
+            return {"plan_type": "index_scan", "cost": 50}
+
+    trainer = ExecutionAwareTrainer(db_connector=MockDbConnector())
+
+    # Example evaluation
     correct_sql = "SELECT id, name FROM users WHERE age > 18"
-    incorrect_sql = "SELECT id, name FROM user WHERE age > 18"  # Table name typo
+    generated_sql_ok = "SELECT id, name FROM users WHERE age > 18 ORDER BY id"
+    generated_sql_bad_table = "SELECT id, name FROM user WHERE age > 18"
 
-    # Calculate loss
-    loss = trainer.sql_correctness_loss(incorrect_sql, correct_sql, "example_db")
-    print(f"SQL Correctness Loss: {loss}")
+    print("\n--- Evaluating OK Query ---")
+    metrics_ok = trainer.evaluate_query(generated_sql_ok, correct_sql, "db1")
+    print(metrics_ok)
 
-    # Evaluate query
-    metrics = trainer.evaluate_query(incorrect_sql, correct_sql, "example_db")
-    print(f"Evaluation Metrics: {metrics}")
+    print("\n--- Evaluating Bad Table Query ---")
+    metrics_bad = trainer.evaluate_query(generated_sql_bad_table, correct_sql, "db1")
+    print(metrics_bad)
 
-    # Generate prompt
+    # Example prompt generation (uses mock schema methods)
+    print("\n--- Generating Prompt ---")
     prompt = trainer.generate_schema_aware_prompt(
-        "example_db",
-        ["users", "orders"],
-        "Find all users who placed orders in January 2023",
+        db_name="db1",
+        target_tables=["users", "orders"],
+        question="Show users and their order counts.",
+        complexity_estimate="medium",
     )
-    print(f"Generated Prompt:\n{prompt}")
+    print(prompt)
+    print("\n--- Example End ---")
