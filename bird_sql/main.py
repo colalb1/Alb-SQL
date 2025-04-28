@@ -248,7 +248,7 @@ def predict(
 def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="BIRD-SQL: SQL generation from natural language"
+        description="Alb-SQL: SQL generation from natural language"
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
