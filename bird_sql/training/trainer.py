@@ -243,7 +243,7 @@ class TrainingPipeline:
         train_losses = []
 
         # Initialize mixed precision scaler if needed
-        scaler = torch.cuda.amp.GradScaler() if self.fp16 else None
+        scaler = torch.amp.GradScaler("cuda") if self.fp16 else None
 
         # Training loop
         self.model.train()
@@ -261,7 +261,7 @@ class TrainingPipeline:
 
                 # Forward pass with mixed precision if enabled
                 if self.fp16:
-                    with torch.cuda.amp.autocast():
+                    with torch.amp.autocast("cuda"):
                         outputs = self.model(
                             input_ids=batch["input_ids"],
                             attention_mask=batch["attention_mask"],
