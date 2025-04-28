@@ -90,28 +90,26 @@ class SQLDataset(Dataset):
 
         # Format input and output
         input_text = self._format_input(example["question"], schema_str)
-        output_text = self._format_output(example["query"])
+        output_text = self._format_output(example["SQL"])
 
         # Tokenize input and output
         if self.tokenizer:
             # Tokenize input
-            inputs = self.tokenizer(
-                input_text,
-                max_length=self.max_input_length,
+            inputs = self.tokenizer.encode_input(
+                question=example["question"],
+                schema=schema_str,
                 padding="max_length",
                 truncation=True,
                 return_tensors="pt",
             )
 
             # Tokenize output for training
-            with self.tokenizer.as_target_tokenizer():
-                outputs = self.tokenizer(
-                    output_text,
-                    max_length=self.max_output_length,
-                    padding="max_length",
-                    truncation=True,
-                    return_tensors="pt",
-                )
+            outputs = self.tokenizer.encode_output(
+                sql_query=example["SQL"],
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
 
             # Create the final item
             item = {
